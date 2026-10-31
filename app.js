@@ -23,21 +23,21 @@ async function init(){
   let {data:{session}}=await sb.auth.getSession();
   if(!session){const r=await sb.auth.signInAnonymously();if(r.error)throw r.error;session=r.data.session}
   me=session.user.id;
-  let {data:p}=await sb.from('players').select('*').eq('id',me).maybeSingle();
-  if(!p){const name=(prompt('What shall we call you?')||'Reader').trim().slice(0,20)||'Reader';const r=await sb.from('players').insert({id:me,name}).select().single();if(r.error)throw r.error;p=r.data}
+  let {data:p}=await sb.from('wg_players').select('*').eq('id',me).maybeSingle();
+  if(!p){const name=(prompt('What shall we call you?')||'Reader').trim().slice(0,20)||'Reader';const r=await sb.from('wg_players').insert({id:me,name}).select().single();if(r.error)throw r.error;p=r.data}
   P=p;route();addEventListener('hashchange',route);
  }catch(e){fatal(e.message||e)}
 }
 async function route(){
  clearInterval(timer);const c=location.hash.slice(1).toUpperCase();
  if(c.length!=4)return lobby();
- const {data,error}=await sb.rpc('join_game',{p_code:c});
+ const {data,error}=await sb.rpc('wg_join_game',{p_code:c});
  if(error){alert(error.message);location.hash='';return}
  G=data;key=null;lastSig='';await draw();timer=setInterval(draw,4000);
 }
 async function lobby(){
  G=null;document.body.dataset.t='lobby';
- const [g,w]=await Promise.all([sb.from('games').select('*').order('created_at',{ascending:false}).limit(12),sb.from('winners').select('*').order('won_at',{ascending:false}).limit(8)]);
+ const [g,w]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(12),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(8)]);
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<div class="lg">
  <div class="pn"><h2>Begin a New Game</h2>${['ogle','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}<button class="btn" disabled>Rabble — coming soon</button></div>
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
@@ -45,10 +45,10 @@ async function lobby(){
  <div class="pn"><h2>Hall of Winners</h2>${(w.data||[]).map(x=>`<div class="hl"><div class="gm"><span>${KINDS[x.kind][0]} — ${esc(x.victors)}</span><em>${new Date(x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</em></div><p>${esc(x.score||'')}</p></div>`).join('')||'<p><em>No victors yet.</em></p>'}</div></div>`);
 }
 async function load(){
- const [m,d,r,g]=await Promise.all([sb.from('moves').select('*').eq('game_id',G.id).order('id'),sb.from('disputes').select('*').eq('game_id',G.id).order('id'),sb.from('cm_reveals').select('*').eq('game_id',G.id),sb.from('games').select('*').eq('id',G.id).single()]);
+ const [m,d,r,g]=await Promise.all([sb.from('wg_moves').select('*').eq('game_id',G.id).order('id'),sb.from('wg_disputes').select('*').eq('game_id',G.id).order('id'),sb.from('wg_cm_reveals').select('*').eq('game_id',G.id),sb.from('wg_games').select('*').eq('id',G.id).single()]);
  moves=m.data||[];disp=d.data||[];reveals=r.data||[];if(g.data)G=g.data;
- const {data:ps}=await sb.from('players').select('*').in('id',[G.p1,G.p2].filter(Boolean));names=Object.fromEntries((ps||[]).map(p=>[p.id,p.name]));
- if(G.kind=='codemaster'&&G.p1==me&&!key){const {data:k}=await sb.from('cm_keys').select('key').eq('game_id',G.id).maybeSingle();key=k&&k.key}
+ const {data:ps}=await sb.from('wg_players').select('*').in('id',[G.p1,G.p2].filter(Boolean));names=Object.fromEntries((ps||[]).map(p=>[p.id,p.name]));
+ if(G.kind=='codemaster'&&G.p1==me&&!key){const {data:k}=await sb.from('wg_cm_keys').select('key').eq('game_id',G.id).maybeSingle();key=k&&k.key}
 }
 async function draw(){
  if(!G)return;await load();
@@ -99,25 +99,25 @@ VIEW.codemaster=()=>{
 };
 VIEW.rabble=()=>shell('<div class="row"><div class="pn"><p>Rabble is coming soon.</p></div></div>');
 const ACT={
- async new(k){const {data,error}=await sb.rpc('create_game',{p_kind:k,p_seed:SEED[k]()});if(error)return alert(error.message);location.hash=data.code},
+ async new(k){const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k]()});if(error)return alert(error.message);location.hash=data.code},
  join(){const c=$('#jc').value.trim().toUpperCase();if(c.length==4)location.hash=c},
  async copy(){await navigator.clipboard.writeText(location.origin+location.pathname+'#'+G.code);alert('Invite link copied')},
  async words(){const raw=[...new Set($('#w').value.toUpperCase().split(/[^A-Z]+/).filter(w=>w.length>=3))];const ok=raw.filter(w=>fits(w,G.seed.board)),bad=raw.filter(w=>!ok.includes(w));
   if(bad.length&&!confirm('Not on the board, dropped: '+bad.join(', ')+'. Submit the rest?'))return;
-  await sb.from('moves').insert({game_id:G.id,player:me,payload:{words:ok}});refresh()},
+  await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{words:ok}});refresh()},
  async answers(){const a=[...document.querySelectorAll('.ans')].map(i=>i.value.trim()).map(v=>v&&v[0].toUpperCase()==G.seed.letter?v:'');
   if(a.some((v,i)=>!v&&document.querySelectorAll('.ans')[i].value.trim())&&!confirm('Some answers don’t start with '+G.seed.letter+' and will be dropped. Send anyway?'))return;
-  await sb.from('moves').insert({game_id:G.id,player:me,payload:{answers:a}});refresh()},
- async dispute(v){await sb.from('disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
- async rule(v,t){await sb.rpc('rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
+  await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{answers:a}});refresh()},
+ async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
+ async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
  async clue(){const c=$('#cl').value.trim().toUpperCase(),n=+$('#cn').value;
   if(!/^[A-Z'-]+$/.test(c)||G.seed.words.includes(c))return alert('One word, and not one on the board.');
-  await sb.from('moves').insert({game_id:G.id,player:me,payload:{clue:c,n}});refresh()},
- async end(){await sb.from('moves').insert({game_id:G.id,player:me,payload:{end:true}});refresh()},
- async guess(v){const {error}=await sb.rpc('cm_guess',{p_game:G.id,p_idx:+v});if(error)alert(error.message);refresh()},
+  await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{clue:c,n}});refresh()},
+ async end(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{end:true}});refresh()},
+ async guess(v){const {error}=await sb.rpc('wg_cm_guess',{p_game:G.id,p_idx:+v});if(error)alert(error.message);refresh()},
  async finish(v){let w=null,s=null;
   if(v!='lost'){const [a,b]=v.split('|').map(Number);w=a>b?P.name:b>a?names[opp()]:'A draw';s=`${Math.max(a,b)} – ${Math.min(a,b)}`}
-  await sb.rpc('finish_game',{p_game:G.id,p_victors:w,p_score:s});refresh()}
+  await sb.rpc('wg_finish_game',{p_game:G.id,p_victors:w,p_score:s});refresh()}
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(t&&!t.disabled)ACT[t.dataset.a](t.dataset.v,t)});
 init();
