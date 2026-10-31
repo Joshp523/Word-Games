@@ -1,0 +1,54 @@
+html,body{margin:0;background:var(--bg);-webkit-text-size-adjust:100%}
+.pg{min-height:780px;box-sizing:border-box;padding:max(22px,env(safe-area-inset-top,0px)) max(28px,env(safe-area-inset-right,0px)) max(22px,env(safe-area-inset-bottom,0px)) max(28px,env(safe-area-inset-left,0px));background:var(--bg);color:var(--ink);font-family:'Cormorant Garamond',Georgia,serif;font-size:20px;text-align:center}
+.fr{position:relative;border:4px double var(--go);outline:1px solid var(--go);outline-offset:-14px;padding:30px 84px 40px;box-sizing:border-box}
+.cn{position:absolute;color:var(--go);fill:currentColor;height:120px;width:auto}
+.k-bl{left:8px;bottom:8px}.k-br{right:8px;bottom:8px;transform:scaleX(-1)}.k-tl{left:8px;top:8px;transform:scaleY(-1)}.k-tr{right:8px;top:8px;transform:scale(-1,-1)}
+.o{color:var(--go);fill:currentColor;display:block;margin:0 auto;max-width:70%;height:auto}
+h1{margin:6px 0 2px;font-family:'Cinzel Decorative',serif;font-size:clamp(32px,9vw,64px);color:var(--go);font-weight:700}
+.sub{margin:0 0 10px;font-style:italic;color:var(--ink)}
+.row{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap;text-align:left;margin-top:18px}
+.bd{flex:1 1 300px}
+.pn{flex:1 1 280px;max-width:340px;box-sizing:border-box;background:var(--pn);border:2px solid var(--go);outline:1px solid var(--go);outline-offset:-6px;padding:26px 30px}
+.pn h2{margin:0 0 8px;font-family:'Cinzel Decorative',serif;font-size:21px;color:var(--go)}
+.pn p{margin:6px 0}
+.big{font-size:44px;color:var(--go);font-weight:600}
+.btn{display:block;width:100%;min-height:48px;margin-top:14px;background:var(--go);color:var(--bg);border:0;font:600 20px 'Cormorant Garamond',serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--go);border:2px solid var(--go)}
+.g{display:grid;gap:8px;padding:16px;background:var(--pn);border:2px solid var(--go)}
+.g b,.g i{display:flex;align-items:center;justify-content:center;font-style:normal;aspect-ratio:1}
+.g b{background:#f3e6c8;color:var(--bg);font:700 clamp(11px,3vw,20px) 'Cinzel Decorative',serif;border-radius:3px;position:relative}
+.g b small{position:absolute;right:2px;bottom:0;font:600 clamp(6px,1.5vw,10px) 'Cormorant Garamond',serif}
+.g4{grid-template-columns:repeat(4,1fr)}.g4 b{font-size:clamp(22px,7vw,36px)}
+.g15{grid-template-columns:repeat(15,1fr);gap:2px;padding:10px}
+.g15 i{background:#0c2417;border-radius:2px;font:700 clamp(6px,1.6vw,10px) 'Cormorant Garamond',serif}
+.g15 b.n{outline:2px solid var(--go);outline-offset:-2px}
+.g15 i.tw,.key i.tw{background:#8f1d2c;color:#f6ead0}.g15 i.dw,.key i.dw{background:#d89aa6;color:#2a0a12}.g15 i.tl,.key i.tl{background:#2b5fa8;color:#f3f7ff}.g15 i.dl,.key i.dl{background:#a9cbe8;color:#0d2236}
+.g15 .tw::after{content:"TW"}.g15 .dw::after{content:"DW"}.g15 .tl::after{content:"TL"}.g15 .dl::after{content:"DL"}
+.key{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin-top:12px;font-size:17px}
+.key i{display:inline-block;width:16px;height:16px;border:1px solid var(--go);vertical-align:-2px;margin-right:6px}
+.rack{display:flex;gap:6px;width:100%;max-width:420px;margin:14px auto 0}
+.rack b{flex:1;max-width:56px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#f3e6c8;color:var(--bg);font:700 clamp(16px,5vw,28px) 'Cinzel Decorative',serif;border-radius:3px}
+.lt{font:700 120px/1 'Cinzel Decorative',serif;color:var(--go);text-align:center}
+label{display:block;margin:10px 0 2px;font-style:italic;color:var(--go)}
+input{width:100%;box-sizing:border-box;min-height:44px;padding:6px 12px;background:var(--bg);color:var(--ink);border:1px solid var(--go);font:500 20px 'Cormorant Garamond',serif}
+.code{font:700 52px 'Cinzel Decorative',serif;letter-spacing:.2em;color:var(--go);text-align:center;margin:8px 0;padding-left:.2em}
+.lg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:28px;align-items:stretch;margin-top:18px;text-align:left}
+.lg .pn{max-width:none;width:100%}
+.gm{display:flex;justify-content:space-between;gap:12px;padding-top:10px}
+.hl{padding-bottom:10px;border-bottom:1px solid var(--go)}.hl p{margin:2px 0 0;font-style:italic}
+.cw{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.cw :is(b,button){display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1.25;padding:2px;overflow:hidden;font:700 clamp(10px,2.9vw,18px) 'Cormorant Garamond',serif;letter-spacing:.04em;text-transform:uppercase;border:2px solid var(--go);border-radius:3px;background:#efe6d0;color:#1b0c33}
+.cw :is(b,button).a,.key .a{background:#3d6b4f;color:#f2ead3}.cw :is(b,button).m,.key .m{background:#a8906c;color:#1f1408}.cw :is(b,button).k,.key .k{background:#0a0612;color:#efe6fa}.cw :is(b,button).r{outline:2px dashed #efe6fa;outline-offset:-6px}.key .u{background:#efe6d0}
+@media(max-width:700px){.pg{min-height:100vh;padding:max(3px,env(safe-area-inset-top,0px)) max(3px,env(safe-area-inset-right,0px)) max(3px,env(safe-area-inset-bottom,0px)) max(3px,env(safe-area-inset-left,0px))}.fr{padding:24px 10px 30px;border-width:3px;outline-offset:-8px}.g15 i::after{display:none}.k-bl,.k-tl{left:4px}.k-br,.k-tr{right:4px}.cn{height:68px}.row{gap:20px}.pn{padding:22px 18px;max-width:none!important;flex-basis:100%}.bd{max-width:none!important;flex-basis:100%}.g{padding:10px;gap:6px}.lt{font-size:96px}.code{font-size:44px}.big{font-size:38px}}
+body[data-t=lobby]{--bg:#d9a82b;--pn:#f3dc8a;--go:#2e1c03;--ink:#2e1c03}
+body[data-t=ogle]{--bg:#3b0a16;--pn:#5a1224;--go:#d9b873;--ink:#f3e6c8}
+body[data-t=rabble]{--bg:#0f2a1c;--pn:#173a28;--go:#d9b873;--ink:#efe9d2}
+body[data-t=categories]{--bg:#0d1b3a;--pn:#15295a;--go:#cfd8ea;--ink:#eef2fb}
+body[data-t=codemaster]{--bg:#24103f;--pn:#351a5c;--go:#d9b873;--ink:#efe6fa}
+textarea{width:100%;box-sizing:border-box;background:var(--bg);color:var(--ink);border:1px solid var(--go);font:500 20px 'Cormorant Garamond',serif;padding:8px 12px}
+.lnk{background:none;border:0;color:var(--go);font:italic 17px 'Cormorant Garamond',serif;text-decoration:underline;cursor:pointer;min-height:44px}
+a.btn{text-decoration:none;text-align:center;line-height:48px;box-sizing:border-box}
+a.gm{color:inherit;text-decoration:none}
+.cin{text-transform:uppercase;letter-spacing:.3em;text-align:center}
+button:disabled{opacity:.5;cursor:default}
+.cw button{cursor:pointer}.cw button:disabled{opacity:1;cursor:default}
