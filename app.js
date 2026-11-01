@@ -10,11 +10,11 @@ const SEED={
  ogle:()=>({board:shuf(DICE).map(d=>{const c=d[Math.floor(Math.random()*6)];return c=='Q'?'Qu':c})}),
  categories:()=>({letter:'ABCDEFGHIJKLMNOPRSTW'[Math.floor(Math.random()*20)],cats:shuf(CATS).slice(0,6)}),
  codemaster:()=>({words:shuf(WORDS).slice(0,25).map(w=>w.toUpperCase())})};
-const CAT_SECS=180,OGLE_SECS=180,LIM=5,saved=()=>localStorage.getItem('rr_name')||'';
+const CAT_SECS=60,OGLE_SECS=180,LIM=5,saved=()=>localStorage.getItem('rr_name')||'';
 let me,P,G,moves=[],disp=[],reveals=[],names={},key=null,timer,lastSig='';
 const svg=(k,h,c='o')=>{const o=ORN[k];return `<svg class="${c}" viewBox="0 0 ${o.w} ${o.h}" height="${h}" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${o.d}"/></svg>`};
 const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
-const shell=b=>{document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b)};
+const shell=b=>{const y=scrollY;document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b);scrollTo(0,y);tick()};
 const nm=id=>esc(names[id]||'…'),opp=()=>G.p1==me?G.p2:G.p1;
 const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="row"><div class="pn"><p>${esc(m)}</p><p><em>Check config.js, run schema.sql, and enable anonymous sign-ins in Supabase.</em></p></div></div>`);
 
@@ -68,6 +68,7 @@ const fits=(w,b)=>{const u=Array(16).fill(0);const f=(i,k)=>{if(b[i]!==w[k])retu
 const VIEW={};
 const OG={id:null,path:[]};
 const ow=()=>JSON.parse(localStorage.getItem('rr_ow_'+G.id)||'[]'),adj=(a,b)=>Math.abs((a>>2)-(b>>2))<2&&Math.abs((a&3)-(b&3))<2;
+function ogPaint(){const l=OG.path.at(-1);document.querySelectorAll('.g4 b[data-a="otap"]').forEach((e,i)=>{e.className=OG.path.includes(i)?(i===l?'u l':'u'):''});const c=document.querySelector('.curw');if(c)c.innerHTML=ocur()||'&nbsp;'}
 const ocur=()=>OG.path.map(i=>G.seed.board[i].toUpperCase()).join('');
 VIEW.ogle=()=>{
  if(!G.p2)return wait();
@@ -90,7 +91,7 @@ VIEW.categories=()=>{
  const L=(a,o)=>a.reduce((s,x,i)=>s+(x&&x.toLowerCase()!=(o[i]||'').toLowerCase()&&!fk(x.toLowerCase())?1:0),0);
  let p;
  const t0=+localStorage.getItem('rr_t_'+G.id)||0;
- if(!mine&&!t0)p=`<div class="pn" style="max-width:560px"><h2>Ready?</h2><p>You will have ${CAT_SECS/60} minutes once you start. When the clock runs out, your answers are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
+ if(!mine&&!t0)p=`<div class="pn" style="max-width:560px"><h2>Ready?</h2><p>You will have ${CAT_SECS} seconds once you start. When the clock runs out, your answers are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
  else if(!mine){const dr=JSON.parse(localStorage.getItem('rr_d_'+G.id)||'[]');p=`<div class="pn" style="max-width:560px"><h2>Your Answers</h2>${cats.map((c,i)=>`<label for="a${i}">${i+1}. ${esc(c)}</label><input id="a${i}" class="ans" autocomplete="off" value="${esc(dr[i]||'')}">`).join('')}<button class="btn" data-a="answers">Seal &amp; Send</button>${lobbyBtn}</div>`}
  else if(!th)p=`<div class="pn"><h2>Sealed</h2><p><em>Waiting on ${nm(opp())}…</em></p>${lobbyBtn}</div>`;
  else{const A=mine.payload.answers,B=th.payload.answers,x=L(A,B),y=L(B,A);
@@ -143,7 +144,7 @@ VIEW.rabble=()=>{
  const rack=S.racks[me].map((l,ri)=>used.has(ri)?'':`<b class="${RB.sel===ri?'s':''}" data-a="rsel" data-v="${ri}">${l=='?'?'_':l}<small>${TV[l]}</small></b>`).join('');
  const ctl=S.over||G.status=='finished'?fin(S.tot[me],S.tot[opp()]):mine?(open?'<p><em>Settle your dispute first.</em></p>':'<button class="btn" data-a="rplay">Play Word</button><button class="btn ghost" data-a="rrecall">Recall Tiles</button><button class="btn ghost" data-a="rpass">Pass Turn</button>'):`<p><em>Waiting on ${nm(opp())}…</em></p>`;
  const dl=mine&&!open&&lw&&lw.words?`<h2>Last Play</h2><p>${nm(opp())} played for ${lw.score}.</p>${lw.words.map(w=>`<div class="gm"><span>${esc(w)}</span>${dbtn(w)}</div>`).join('')}`:'';
- shell(`<div class="row"><div class="bd" style="max-width:600px"><div class="g g15">${cells}</div><div class="rack">${rack}</div></div><div class="pn"><h2>Scores</h2><p>You — <span class="big">${S.tot[me]}</span></p><p>${nm(opp())} — <span class="big">${S.tot[opp()]}</span></p><p>Tiles in bag: ${S.left}</p>${dl}${ctl}${lobbyBtn}</div>${dbox()}</div>`);
+ shell(`<div class="row"><div class="bd" style="max-width:600px"><div class="g g15">${cells}</div><div class="key"><span><i class="tw"></i>Triple Word</span><span><i class="dw"></i>Double Word</span><span><i class="tl"></i>Triple Letter</span><span><i class="dl"></i>Double Letter</span></div><div class="rack">${rack}</div></div><div class="pn"><h2>Scores</h2><p>You — <span class="big">${S.tot[me]}</span></p><p>${nm(opp())} — <span class="big">${S.tot[opp()]}</span></p><p>Tiles in bag: ${S.left}</p>${dl}${ctl}${lobbyBtn}</div>${dbox()}</div>`);
 };
 const ACT={
  async new(k){const n=$('#me').value.trim();if(!n)return alert('Please enter your name first.');localStorage.setItem('rr_name',n);const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:n});if(error)return alert(error.message);location.hash=data.code},
@@ -162,7 +163,7 @@ const ACT={
  async rpass(){if(!confirm('Pass your turn?'))return;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{pass:true}});refresh()},
  join(){const c=$('#jc').value.trim().toUpperCase();if(c.length==4)location.hash=c},
  async copy(){await navigator.clipboard.writeText(location.origin+location.pathname+'#'+G.code);alert('Invite link copied')},
- otap(v){const i=+v,l=OG.path.at(-1);if(OG.path.length&&i===l)OG.path.pop();else if(OG.path.includes(i))return;else if(!OG.path.length||adj(l,i))OG.path.push(i);else return;VIEW.ogle()},
+ otap(v){const i=+v,l=OG.path.at(-1);if(OG.path.length&&i===l)OG.path.pop();else if(OG.path.includes(i))return;else if(!OG.path.length||adj(l,i))OG.path.push(i);else return;ogPaint()},
  oadd(){const w=ocur();if(w.length<3)return alert('Words need at least 3 letters.');const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem('rr_ow_'+G.id,JSON.stringify(a))}OG.path=[];VIEW.ogle()},
  oclr(){OG.path=[];VIEW.ogle()},
  orm(v){localStorage.setItem('rr_ow_'+G.id,JSON.stringify(ow().filter(w=>w!=v)));VIEW.ogle()},
@@ -186,7 +187,8 @@ const ACT={
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(t&&!t.disabled)ACT[t.dataset.a](t.dataset.v,t)});
 document.addEventListener('input',e=>{if(G&&e.target.classList&&e.target.classList.contains('ans'))localStorage.setItem('rr_d_'+G.id,JSON.stringify([...document.querySelectorAll('.ans')].map(i=>i.value)))});
 let sending=false;
-setInterval(()=>{if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+localStorage.getItem('rr_t_'+G.id)||0,el=$('#cdown');if(!t0||!el||moves.some(m=>m.player==me))return;
+function tick(){if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+localStorage.getItem('rr_t_'+G.id)||0,el=$('#cdown');if(!t0||!el||moves.some(m=>m.player==me))return;
  const left=Math.max(0,(G.kind=='ogle'?OGLE_SECS:CAT_SECS)-Math.floor((Date.now()-t0)/1000));el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');
- if(left==0&&!sending){sending=true;ACT[G.kind=='ogle'?'words':'answers'](null,null,true).finally(()=>sending=false)}},1000);
+ if(left==0&&!sending){sending=true;ACT[G.kind=='ogle'?'words':'answers'](null,null,true).finally(()=>sending=false)}}
+setInterval(tick,1000);
 init();
