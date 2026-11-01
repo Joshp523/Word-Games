@@ -131,7 +131,7 @@ create extension if not exists pg_net;
 create or replace function wg_ping_notify() returns trigger language plpgsql security definer set search_path=public as $$
 begin
   perform net.http_post(url:='https://vikxpnxnbmhmawhnwxzl.supabase.co/functions/v1/wg-notify',
-    headers:=jsonb_build_object('Content-Type','application/json','x-webhook-secret','supercalifragilisticexpialidocious'),
+    headers:=jsonb_build_object('Content-Type','application/json','x-webhook-secret','CHANGE-ME'),
     body:=jsonb_build_object('table',TG_TABLE_NAME,'record',to_jsonb(NEW)));
   return NEW;
 end $$;
