@@ -1,0 +1,2 @@
+self.addEventListener('push',e=>{const d=e.data?e.data.json():{};e.waitUntil(self.registration.showNotification(d.title||'Your turn',{body:d.body||'',icon:'icon-192.png',badge:'icon-192.png',data:d.url||'./'}))});
+self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c){c.navigate(e.notification.data);return c.focus()}}return clients.openWindow(e.notification.data)}))});
