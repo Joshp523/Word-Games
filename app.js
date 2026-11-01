@@ -16,6 +16,8 @@ const svg=(k,h,c='o')=>{const o=ORN[k];return `<svg class="${c}" viewBox="0 0 ${
 const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
 const shell=b=>{const y=scrollY;document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b);scrollTo(0,y);tick()};
 const nm=id=>esc(names[id]||'…'),opp=()=>G.p1==me?G.p2:G.p1;
+async function pushOn(){try{if(!('serviceWorker' in navigator&&'PushManager' in window))return false;const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();
+ if(sub){const j=sub.toJSON();sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'}).then(()=>{})}return !!sub}catch(e){return false}}
 const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="row"><div class="pn"><p>${esc(m)}</p><p><em>Check config.js, run schema.sql, and enable anonymous sign-ins in Supabase.</em></p></div></div>`);
 
 async function init(){
@@ -38,11 +40,12 @@ async function route(){
 }
 async function lobby(){
  G=null;document.body.dataset.t='lobby';
+ const on=await pushOn();
  const [g,w]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(12),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(8)]);
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<div class="lg">
- <div class="pn"><h2>Begin a New Game</h2><label for="me">Your name</label><input id="me" maxlength="20" value="${esc(saved())}" autocomplete="name">${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
- <div class="pn"><h2>Your Games</h2>${(g.data||[]).map(x=>`<a class="gm hl" href="#${x.code}"><span>${KINDS[x.kind][0]} · ${x.code}</span><em>${x.status}</em></a>`).join('')||'<p><em>None yet.</em></p>'}<button class="btn ghost" data-a="push">Turn Alerts</button></div>
+ <div class="pn"><h2>Begin a New Game</h2><label for="me">Your name</label><input id="me" maxlength="20" value="${esc(saved())}" autocomplete="name">${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
+ <div class="pn"><h2>Your Games</h2>${(g.data||[]).map(x=>`<a class="gm hl" href="#${x.code}"><span>${KINDS[x.kind][0]} · ${x.code}</span><em>${x.status}</em></a>`).join('')||'<p><em>None yet.</em></p>'}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
  <div class="pn"><h2>Hall of Winners</h2>${(w.data||[]).map(x=>`<div class="hl"><div class="gm"><span>${KINDS[x.kind][0]} — ${esc(x.victors)}</span><em>${new Date(x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</em></div><p>${esc(x.score||'')}</p></div>`).join('')||'<p><em>No victors yet.</em></p>'}</div></div>`);
 }
 async function load(){
@@ -154,7 +157,7 @@ const ACT={
   const reg=await navigator.serviceWorker.register('sw.js');if(await Notification.requestPermission()!='granted')return alert('Notifications are blocked for this site.');
   const u=VAPID_PUBLIC_KEY.replace(/-/g,'+').replace(/_/g,'/'),raw=atob(u+'='.repeat((4-u.length%4)%4));
   const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))}),j=sub.toJSON();
-  const {error}=await sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'});alert(error?error.message:'Turn alerts are on.')},
+  const {error}=await sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'});alert(error?error.message:'Turn alerts are on.');if(!error)lobby()},
  rsel(v){RB.sel=RB.sel===+v?null:+v;VIEW.rabble()},
  rput(v){const S=rstate();if(RB.sel==null||S.turn!=me||S.over)return;let l=S.racks[me][RB.sel],b=0;if(l=='?'){l=(prompt('Which letter should the blank be?')||'').toUpperCase().slice(0,1);if(!/[A-Z]/.test(l))return;b=1}RB.pend.set(+v,{l,b,ri:RB.sel});RB.sel=null;VIEW.rabble()},
  rpick(v){RB.pend.delete(+v);VIEW.rabble()},

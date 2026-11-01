@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8"><title>Make push-notification keys</title>
+<body style="font:17px system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px">
+<h1>Make push-notification keys</h1>
+<p>This page runs only in your browser. Nothing is sent anywhere.</p>
+<button id="g" style="font-size:18px;padding:12px 20px">Generate keys</button>
+<h3>Public key: paste into config.js (VAPID_PUBLIC_KEY) and Supabase (VAPID_PUBLIC)</h3>
+<textarea id="pub" rows="3" style="width:100%;font-size:15px" readonly></textarea>
+<h3>Private key: paste into Supabase only (VAPID_PRIVATE). Never put this on GitHub.</h3>
+<textarea id="prv" rows="2" style="width:100%;font-size:15px" readonly></textarea>
+<script>
+const b=u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+document.getElementById('g').onclick=async()=>{
+ const k=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign']);
+ document.getElementById('pub').value=b(new Uint8Array(await crypto.subtle.exportKey('raw',k.publicKey)));
+ document.getElementById('prv').value=(await crypto.subtle.exportKey('jwk',k.privateKey)).d;
+};
+</script>
