@@ -38,14 +38,26 @@ async function route(){
  G=null;document.body.dataset.t='lobby';
  app.innerHTML=frame('Take a Seat','you are invited · code '+esc(c),`<div class="row"><div class="pn"><h2>Your Name</h2><label for="nm">What shall we call you?</label><input id="nm" maxlength="20" value="${esc(saved())}" autocomplete="name"><button class="btn" data-a="seat" data-v="${esc(c)}">Join the Game</button><a class="btn ghost" href="#">The Lobby</a></div></div>`);
 }
+function turnOf(g,mv){
+ if(g.status=='finished')return'finished';if(!g.p2)return'waiting for a friend';
+ const other=g.p1==me?g.p2:g.p1,lm=mv.at(-1);
+ if(g.kind=='rabble')return(lm?lm.player!=me:g.p1==me)?'your turn':"opponent's turn";
+ if(g.kind=='codemaster'){const open=lm&&lm.payload.clue;return(open?g.p2==me:g.p1==me)?'your turn':"opponent's turn"}
+ const c=rnds(g,mv),n=c.cur.n,did=p=>mv.some(m=>m.player==p&&(m.payload.r||1)==n&&(m.payload.words||m.payload.answers));
+ if(!did(me))return'your turn';if(!did(other))return"opponent's turn";
+ return c.req?(c.req.by!=me?'your turn':"opponent's turn"):'round complete'}
+function rowLabel(x,mv){const on=x.p1==me?(x.p2?x.p2_name:null):x.p1_name,t=turnOf(x,mv||[]);
+ return(on?`${KINDS[x.kind][0]} with ${esc(on)}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br><em>${t=='your turn'?'<strong>your turn</strong>':t}</em>`}
 async function lobby(){
  G=null;document.body.dataset.t='lobby';
  const on=await pushOn();
  const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(8),sb.from('wg_hidden').select('game_id')]);const hid=new Set((h.data||[]).map(r=>r.game_id));
+ const vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={};
+ if(vis.length)((await sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',vis.map(x=>x.id)).order('id')).data||[]).forEach(m=>(MV[m.game_id]=MV[m.game_id]||[]).push(m));
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<div class="lg">
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
  <div class="pn"><h2>Begin a New Game</h2><label for="me">Your name</label><input id="me" maxlength="20" value="${esc(saved())}" autocomplete="name">${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
- <div class="pn"><h2>Your Games</h2>${(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12).map(x=>`<div class="gm hl"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} · ${x.code} <em>${x.status}</em></a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ <div class="pn"><h2>Your Games</h2>${vis.map(x=>`<div class="gm hl"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
  <div class="pn"><h2>Hall of Winners</h2>${(w.data||[]).map(x=>`<div class="hl"><div class="gm"><span>${KINDS[x.kind][0]} — ${esc(x.victors)}</span><em>${new Date(x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</em></div><p>${esc(x.score||'')}</p></div>`).join('')||'<p><em>No victors yet.</em></p>'}</div></div>`);
 }
 async function load(){
@@ -70,8 +82,8 @@ const pts=w=>w.length>=8?11:[0,0,0,1,1,2,3,5][w.length];
 const fits=(w,b)=>{const u=Array(16).fill(0);const f=(i,k)=>{if(b[i]!==w[k])return 0;if(k==w.length-1)return 1;u[i]=1;const r=i>>2,c=i&3;for(let dr=-1;dr<2;dr++)for(let dc=-1;dc<2;dc++){const R=r+dr,C=c+dc,j=R*4+C;if(R>=0&&R<4&&C>=0&&C<4&&!u[j]&&f(j,k+1)){u[i]=0;return 1}}u[i]=0;return 0};return [...Array(16).keys()].some(i=>f(i,0))};
 const VIEW={};
 let CUR=1;const K=p=>p+G.id+'_'+CUR;
-function rnds(){const R=[{n:1,seed:G.seed}];let req=null,rej=null;
- for(const m of moves){const p=m.payload;
+function rnds(g=G,mv=moves){const R=[{n:1,seed:g.seed}];let req=null,rej=null;
+ for(const m of mv){const p=m.payload;
   if(p.rematch){req={by:m.player,n:p.rematch.n,seed:p.rematch.seed};rej=null}
   else if(p.accept&&req&&req.n==p.accept&&req.by!=m.player&&req.n==R.length+1){R.push({n:req.n,seed:req.seed});req=null;rej=null}
   else if(p.reject&&req&&req.n==p.reject&&req.by!=m.player){rej=req;req=null}}
@@ -103,7 +115,7 @@ VIEW.ogle=()=>{
  const mb=CUR>1||G.status=='finished'?`<div class="pn">${matchBox(c,false)}</div>`:'';
  let p;
  if(!mine&&!t0)p=`<div class="pn"><h2>Ready?</h2><p>You will have ${OGLE_SECS/60} minutes once you start. Tap letters to spell words. When the clock runs out, your words are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
- else if(!mine){const w=ow();p=`<div class="pn"><h2>Your Word</h2><div class="curw">${ocur()||'&nbsp;'}</div><button class="btn" data-a="oadd">Add Word</button><button class="btn ghost" data-a="oclr">Clear</button><h2 style="margin-top:20px">Words Found (${w.length})</h2>${w.map(x=>`<div class="gm"><span>${esc(x)}</span><button class="lnk" data-a="orm" data-v="${esc(x)}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}<button class="btn" data-a="words">Submit Words</button>${lobbyBtn}</div>`}
+ else if(!mine){const w=ow();p=`<div class="pn"><h2>Your Word</h2><label for="ot">Type a word and press Enter, or tap tiles</label><input id="ot" autocomplete="off" autocapitalize="characters" spellcheck="false"><p id="oerr" style="min-height:1.2em;margin:4px 0"></p><div class="curw">${ocur()||'&nbsp;'}</div><button class="btn" data-a="oadd">Add Word</button><button class="btn ghost" data-a="oclr">Clear</button><h2 style="margin-top:20px">Words Found (${w.length})</h2>${w.map(x=>`<div class="gm"><span>${esc(x)}</span><button class="lnk" data-a="orm" data-v="${esc(x)}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}<button class="btn" data-a="words">Submit Words</button>${lobbyBtn}</div>`}
  else if(!th)p=`<div class="pn"><h2>Submitted</h2><p><em>Waiting on ${nm(opp())}…</em></p>${lobbyBtn}</div>`;
  else{const A=mine.payload.words,B=th.payload.words,x=ogSc(A,B),y=ogSc(B,A),both=A.filter(w=>B.includes(w));
   p=`<div class="pn"><h2>Round ${CUR} Results</h2><p>You <span class="big">${x}</span></p><p>${nm(opp())} <span class="big">${y}</span></p><h2>Your Words</h2>${wl(A,B,0)}<h2>${nm(opp())}’s Words</h2>${wl(B,A,1)}</div><div class="pn">${matchBox(c,true,Math.max(x,y)+' – '+Math.min(x,y))}${lobbyBtn}</div>`}
@@ -128,7 +140,11 @@ VIEW.codemaster=()=>{
  const cm=G.p1==me,W=G.seed.words,rv=Object.fromEntries(reveals.map(r=>[r.idx,r.result])),clues=moves.filter(m=>m.payload.clue),lm=moves.at(-1),open=lm&&lm.payload.clue?lm.payload:null;
  const found=reveals.filter(r=>r.result=='a').length,over=G.status=='finished',lost=reveals.some(r=>r.result=='k');
  const cards=W.map((w,i)=>{const c=rv[i]||(cm&&key?key[i]:'');const go=!cm&&!rv[i]&&!over&&open;return `<button class="${c}${cm&&rv[i]?' r':''}" ${go?`data-a="guess" data-v="${i}"`:'disabled'}>${esc(w)}</button>`}).join('');
- const end=over?`<p><em>${found==9?'Victory — all nine agents found.':lost?'A killer was found. You both fall.':'Out of turns. You both fall.'}</em></p>${lobbyBtn}`:'';
+ function cmRematch(){const q=[...moves].reverse().find(m=>m.payload.rematch||m.payload.accept||m.payload.reject),o=nm(opp());
+ if(q&&q.payload.accept)return`<a class="btn" href="#${esc(q.payload.code)}">Go to the Next Game</a>`;
+ if(q&&q.payload.rematch)return q.player==me?`<p><em>Waiting for ${o} to accept another game…</em></p>`:`<p>${o} wants to play again.</p><button class="btn" data-a="cmacc">Accept</button><button class="btn ghost" data-a="cmrej">Decline</button>`;
+ return(q&&q.payload.reject&&q.player!=me?`<p><em>${o} declined.</em></p>`:'')+'<button class="btn" data-a="cmrq">Play Again</button>'}
+ const end=over?`<p><em>${found==9?'Victory — all nine agents found.':lost?'A killer was found. You both fall.':'Out of turns. You both fall.'}</em></p>${cmRematch()}${lobbyBtn}`:'';
  const side=cm?`<div class="pn"><h2>Codemaster</h2><p>Agents found <span class="big">${found}</span> of 9</p><p>Turns used ${clues.length} of ${LIM}</p>${over?end:open?`<p><em>${nm(G.p2)} is guessing: ${esc(open.clue)} · ${open.n}</em></p>`:clues.length>=LIM?'<button class="btn" data-a="finish" data-v="lost">Close the Book</button>':`<label for="cl">Your clue</label><input id="cl" autocomplete="off"><label for="cn">Number</label><input id="cn" type="number" min="1" max="9" value="1"><button class="btn" data-a="clue">Give Clue</button>`}${over?'':lobbyBtn}</div>`
  :`<div class="pn"><h2>Guesser</h2><p>Agents found <span class="big">${found}</span> of 9</p><p>Turn ${Math.min(open?clues.length:clues.length+1,LIM)} of ${LIM}</p>${over?end:open?`<h2>Current Clue</h2><p class="big">${esc(open.clue)} · ${open.n}</p><button class="btn" data-a="end">End Turn</button>`:'<p><em>Waiting for the clue…</em></p>'}${over?'':lobbyBtn}</div>`;
  shell(`<div class="row"><div class="bd" style="max-width:640px"><div class="cw">${cards}</div></div>${side}</div>`);
@@ -208,13 +224,23 @@ const ACT={
   if(!/^[A-Z'-]+$/.test(c)||G.seed.words.includes(c))return alert('One word, and not one on the board.');
   await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{clue:c,n}});refresh()},
  async end(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{end:true}});if(moves.filter(m=>m.payload.clue).length>=LIM)await sb.rpc('wg_finish_game',{p_game:G.id,p_victors:null,p_score:null});refresh()},
- async guess(v){const {error}=await sb.rpc('wg_cm_guess',{p_game:G.id,p_idx:+v});if(error)alert(error.message);refresh()},
+ async guess(v){const {data,error}=await sb.rpc('wg_cm_guess',{p_game:G.id,p_idx:+v});if(error){alert(error.message);return refresh()}if(data=='m')return ACT.end();refresh()},
+ async cmrq(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{rematch:true}});refresh()},
+ async cmrej(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{reject:true}});refresh()},
+ async cmacc(){const {data,error}=await sb.rpc('wg_cm_rematch',{p_game:G.id,p_seed:SEED.codemaster()});if(error)return alert(error.message);location.hash=data.code},
  async finish(v){let w=null,s=null;
   if(v!='lost'){const [a,b,m,n,pt]=v.split('|'),A=+a,B=+b;w=A>B?names[me]:B>A?names[opp()]:'A draw';s=m&&+n>1?`${Math.max(A,B)} – ${Math.min(A,B)} rounds`:(pt||`${Math.max(A,B)} – ${Math.min(A,B)}`)}
   await sb.rpc('wg_finish_game',{p_game:G.id,p_victors:w,p_score:s});refresh()}
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(t&&!t.disabled)ACT[t.dataset.a](t.dataset.v,t)});
 document.addEventListener('input',e=>{if(G&&e.target.classList&&e.target.classList.contains('ans'))localStorage.setItem(K('rr_d_'),JSON.stringify([...document.querySelectorAll('.ans')].map(i=>i.value)))});
+function trace(w,b){const u=[],f=(k,l)=>{if(k==w.length)return true;for(let i=0;i<16;i++){if(u.includes(i)||(l>=0&&!adj(l,i)))continue;const t=b[i].toUpperCase();if(w.startsWith(t,k)){u.push(i);if(f(k+t.length,i))return true;u.pop()}}return false};return f(0,-1)?u:null}
+document.addEventListener('input',e=>{if(e.target.id!='ot')return;const w=e.target.value.toUpperCase().replace(/[^A-Z]/g,''),p=w?trace(w,rnds().cur.seed.board):[],c=$('.curw');$('#oerr').textContent='';
+ if(p){OG.path=p;ogPaint();c.classList.remove('bad')}else{OG.path=[];ogPaint();c.textContent=w;c.classList.add('bad')}});
+document.addEventListener('keydown',e=>{if(e.key!='Enter'||e.target.id!='ot')return;e.preventDefault();const w=e.target.value.toUpperCase().replace(/[^A-Z]/g,'');
+ if(w.length<3)return void($('#oerr').textContent='Words need at least 3 letters.');
+ if(!trace(w,rnds().cur.seed.board))return void($('#oerr').textContent='“'+w+'” isn’t on the board.');
+ const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();$('#ot').focus()});
 let sending=false;
 function tick(){if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+localStorage.getItem(K('rr_t_'))||0,el=$('#cdown');if(!t0||!el||sub(CUR,me))return;
  const left=Math.max(0,(G.kind=='ogle'?OGLE_SECS:CAT_SECS)-Math.floor((Date.now()-t0)/1000));el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');

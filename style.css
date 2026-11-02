@@ -55,3 +55,4 @@ button:disabled{opacity:.5;cursor:default}
 .g15 b.p{background:#ffe7a8;outline:2px solid var(--go)}.rack b.s{outline:3px solid var(--go)}.g15 i,.g15 b,.rack b{cursor:pointer}.rack b{position:relative}.rack b small{position:absolute;right:3px;bottom:1px;font:600 11px 'Cormorant Garamond',serif}
 .g4 b{cursor:pointer}.g4 b.u{background:#ffe7a8;outline:2px solid var(--go)}.g4 b.l{outline:3px solid var(--go)}.curw{min-height:56px;border:1px solid var(--go);display:flex;align-items:center;justify-content:center;font:700 26px 'Cinzel Decorative',serif;letter-spacing:.1em;margin:10px 0;color:var(--go);word-break:break-all}
 #cdown{min-height:1.2em;margin:6px 0}
+.curw.bad{text-decoration:line-through;opacity:.7}
