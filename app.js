@@ -15,14 +15,14 @@ const CAT_SECS=60,OGLE_SECS=180,LIM=5,saved=()=>localStorage.getItem('rr_name')|
 let me=null,G=null,PL=[],moves=[],disp=[],reveals=[],names={},key=null,timer=null,lastSig='',CUR=1,started=false;
 const svg=(k,h,c='o')=>{const o=ORN[k];return `<svg class="${c}" viewBox="0 0 ${o.w} ${o.h}" height="${h}" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${o.d}"/></svg>`};
 const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
-const shell=b=>{const y=scrollY;document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b);scrollTo(0,y);tick()};
+const shell=b=>{const y=scrollY;document.documentElement.dataset.t=document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b);scrollTo(0,y);tick()};
 const nm=id=>esc(names[id]||'…'),opp=()=>(PL.find(x=>x.player!=me)||{}).player;
 const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="row"><div class="pn"><p>${esc(m)}</p><p><em>Check config.js, run wg_schema.sql, and enable anonymous sign-ins in Supabase.</em></p></div></div>`);
 async function pushOn(){try{if(!('serviceWorker' in navigator&&'PushManager' in window))return false;const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();
  if(sub){const j=sub.toJSON();sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'}).then(()=>{})}return !!sub}catch(e){return false}}
 
 /* ---------- login ---------- */
-function showLogin(){clearInterval(timer);G=null;me=null;document.body.dataset.t='lobby';
+function showLogin(){clearInterval(timer);G=null;me=null;document.documentElement.dataset.t=document.body.dataset.t='lobby';
  app.innerHTML=frame('Welcome','who is playing?',`<div class="row"><div class="pn"><h2>Your Name</h2><p>Type your name to see all your games, on any device. There is no password, so use the same spelling every time.</p><label for="nm">Name</label><input id="nm" maxlength="20" value="${esc(saved())}" autocomplete="name" autocapitalize="words"><button class="btn" data-a="login">Enter</button></div></div>`)}
 async function login(n){const {data,error}=await sb.rpc('wg_login',{p_name:n});if(error){alert(error.message);return false}me=data;localStorage.setItem('rr_name',n.trim());return true}
 async function init(){
@@ -49,9 +49,16 @@ function turnOf(g,mv,pl){
  if(c.req)return c.req.by!=me&&!c.req.acc.has(me)?'your turn':'waiting on others';return'round complete'}
 function rowLabel(x,mv,pl){const on=pl.filter(p=>p.player!=me).map(p=>esc(p.name)).join(', '),t=turnOf(x,mv,pl);
  return(on?`${KINDS[x.kind][0]} with ${on}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br><em>${t=='your turn'?'<strong>your turn</strong>':t}</em>`}
+/* Hall of Winners: the single best result ever recorded for each game.
+   Ogle, Rabble, Categories: the winner's points (first number of the score). Matches scored in rounds are skipped.
+   Codemaster: the win with the most turns to spare. */
+function best(x){const s=x.score||'';if(x.kind=='codemaster'){const m=/(\d+) turns? spare/.exec(s);return m?+m[1]:0}if(/rounds/.test(s)||!x.victors||x.victors=='A draw')return null;const m=/^\s*(\d+)/.exec(s);return m?+m[1]:null}
+function hall(rows){return['ogle','rabble','categories','codemaster'].map(k=>{let top=null;for(const x of rows){if(x.kind!=k)continue;const v=best(x);if(v==null)continue;if(!top||v>top.v)top={x,v}}
+ const what=top?(k=='codemaster'?`${top.v} turn${top.v==1?'':'s'} to spare`:`${top.v} point${top.v==1?'':'s'}`):'';
+ return `<div class="hl"><div class="gm"><span><strong>${KINDS[k][0]}</strong></span>${top?`<em>${new Date(top.x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</em>`:''}</div><p>${top?`${esc(top.x.victors)} — ${what}`:'No high score yet.'}</p></div>`}).join('')}
 async function lobby(){
- G=null;document.body.dataset.t='lobby';const on=await pushOn();
- const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(8),sb.from('wg_hidden').select('game_id')]);
+ G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby';const on=await pushOn();
+ const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id')]);
  const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={},GP={};
  if(vis.length){const ids=vis.map(x=>x.id),[m,p]=await Promise.all([sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',ids).order('id'),sb.from('wg_game_players').select('*').in('game_id',ids).order('seat')]);
   (m.data||[]).forEach(x=>(MV[x.game_id]=MV[x.game_id]||[]).push(x));(p.data||[]).forEach(x=>(GP[x.game_id]=GP[x.game_id]||[]).push(x))}
@@ -59,7 +66,7 @@ async function lobby(){
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
  <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
  <div class="pn"><h2>Your Games</h2>${vis.map(x=>`<div class="gm hl"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
- <div class="pn"><h2>Hall of Winners</h2>${(w.data||[]).map(x=>`<div class="hl"><div class="gm"><span>${KINDS[x.kind][0]} — ${esc(x.victors)}</span><em>${new Date(x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</em></div><p>${esc(x.score||'')}</p></div>`).join('')||'<p><em>No victors yet.</em></p>'}</div></div>`);
+ <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div></div>`);
 }
 
 /* ---------- game loading ---------- */
@@ -74,11 +81,11 @@ async function draw(){
  if(sig===lastSig)return;lastSig=sig;VIEW[G.kind]();
 }
 const refresh=async()=>{lastSig='';await draw()};
-const wait=()=>shell(`<div class="row"><div class="pn"><h2>Invite Players</h2><p>${PL.length} of ${G.max_players} have joined.</p><div class="code">${G.code}</div><p>Send them this link, or the code:</p><input readonly value="${location.origin+location.pathname}#${G.code}"><button class="btn" data-a="copy">Copy Invite Link</button><a class="btn ghost" href="#">The Lobby</a></div></div>`);
+const wait=()=>shell(`<div class="row"><div class="pn"><h2>Invite Players</h2><p>${PL.length} of ${G.max_players} have joined.</p><div class="code">${G.code}</div><p>Send them this link, or the code:</p><input readonly value="${location.origin+location.pathname}#${G.code}"><button class="btn" data-a="copy">Copy Invite Link</button><a class="btn ghost" href="#">Return to Lobby</a></div></div>`);
 const fk=i=>disp.some(d=>d.item==i&&d.verdict=='fake');
 const dbtn=i=>disp.some(d=>d.item==i)?'<em>disputed</em>':`<button class="lnk" data-a="dispute" data-v="${esc(i)}">Dispute</button>`;
 const dbox=()=>disp.filter(d=>!d.verdict).map(d=>d.raised_by==me?`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p>Look it up, then give your verdict.</p><a class="btn ghost" target="_blank" rel="noopener" href="https://www.google.com/search?q=define+${encodeURIComponent(d.item)}">Look It Up</a><button class="btn" data-a="rule" data-v="real" data-id="${d.id}">It’s a Real Word</button><button class="btn ghost" data-a="rule" data-v="fake" data-id="${d.id}">It’s Not a Word</button></div>`:`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p><em>${nm(d.raised_by)} is checking this one…</em></p></div>`).join('');
-const lobbyBtn='<a class="btn ghost" href="#">The Lobby</a>';
+const lobbyBtn='<a class="btn ghost" href="#">Return to Lobby</a>';
 const pts=w=>w.length>=8?11:[0,0,0,1,1,2,3,5][w.length];
 const K=p=>p+G.id+'_'+CUR;
 const finData=(m,unit)=>{const e=PL.map(x=>[x.name,m[x.player]||0]).sort((a,b)=>b[1]-a[1]),top=e.filter(x=>x[1]==e[0][1]);return{w:top.length>1?'A draw':e[0][0],s:e.map(x=>x[1]).join(' – ')+(unit?' '+unit:'')}};
