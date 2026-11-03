@@ -56,3 +56,4 @@ button:disabled{opacity:.5;cursor:default}
 .g4 b{cursor:pointer}.g4 b.u{background:#ffe7a8;outline:2px solid var(--go)}.g4 b.l{outline:3px solid var(--go)}.curw{min-height:56px;border:1px solid var(--go);display:flex;align-items:center;justify-content:center;font:700 26px 'Cinzel Decorative',serif;letter-spacing:.1em;margin:10px 0;color:var(--go);word-break:break-all}
 #cdown{min-height:1.2em;margin:6px 0}
 .curw.bad{text-decoration:line-through;opacity:.7}
+select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1px solid var(--go);font:500 20px 'Cormorant Garamond',serif;padding:6px 10px;box-sizing:border-box}
