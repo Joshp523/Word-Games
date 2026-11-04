@@ -1,4 +1,5 @@
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+// Own sign-in slot so the Word Games never replace another app's login on joshp523.github.io
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{storageKey:'word-games-auth'}});
 const $=s=>document.querySelector(s),app=$('#app');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shuf=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(p=>p[1]);
