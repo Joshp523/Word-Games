@@ -72,3 +72,8 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 .pv em{font-weight:500;font-size:16px}
 .pv.bad{font-style:italic;font-weight:500;opacity:.85}
 .big.lpn{font-size:30px}
+/* Codemaster: black frame, ornaments and title against the yellow leather (panels keep their gold) */
+[data-t=codemaster] .fr{border-color:#17130a;outline-color:#17130a}
+[data-t=codemaster] .cn,[data-t=codemaster] .fr>.o{color:#17130a;filter:drop-shadow(0 1px 1px rgba(255,240,190,.45))}
+[data-t=codemaster] .fr>h1{color:#17130a;text-shadow:0 1px 0 rgba(255,240,190,.5)}
+[data-t=codemaster] .fr>.sub{color:#17130a;text-shadow:none}
