@@ -20,6 +20,7 @@ Word Games is a game parlor for family who live far apart. Start a game, send th
 Each game has its own leather-bound look, the lobby keeps high scores, and **Turn alerts** can ping your phone when it's your move.
 
 <table><tr><td align="center" valign="top"><img src="readme-screen-1.jpg" width="230" alt="Welcome"><br><sub>Welcome</sub></td><td align="center" valign="top"><img src="readme-screen-2.jpg" width="230" alt="The lobby"><br><sub>The lobby</sub></td></tr></table>
+
 ## Why it's worth a look
 
 - **Cool:** It looks like a leather-bound games compendium, a different color for every game.
