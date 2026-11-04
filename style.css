@@ -60,3 +60,15 @@ button:disabled{opacity:.5;cursor:default}
 #cdown{min-height:1.2em;margin:6px 0}
 .curw.bad{text-decoration:line-through;opacity:.7}
 select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1px solid var(--go);font:500 20px 'Cormorant Garamond',serif;padding:6px 10px;box-sizing:border-box}
+/* Lobby: "Your turn" stands out */
+.yt{display:inline-block;margin-top:4px;padding:2px 12px 3px;border-radius:999px;background:var(--go);color:var(--bg);font:700 13px 'Cinzel Decorative',serif;letter-spacing:.06em;box-shadow:0 0 0 2px rgba(230,197,126,.25),0 0 14px rgba(230,197,126,.55);animation:ytglow 2.4s ease-in-out infinite}
+.gm.up{position:relative;padding-left:12px}
+.gm.up::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--go)}
+@keyframes ytglow{50%{box-shadow:0 0 0 2px rgba(230,197,126,.35),0 0 22px rgba(230,197,126,.85)}}
+@media (prefers-reduced-motion:reduce){.yt{animation:none}}
+/* Rabble: live score for tiles placed but not yet played */
+.pv{margin:10px auto 0;padding:8px 14px;border-radius:10px;background:var(--pn);color:var(--ink);text-align:center;font:600 19px 'Cormorant Garamond',serif;letter-spacing:.04em}
+.pv span{color:var(--go);font-weight:700;margin-left:6px}
+.pv em{font-weight:500;font-size:16px}
+.pv.bad{font-style:italic;font-weight:500;opacity:.85}
+.big.lpn{font-size:30px}

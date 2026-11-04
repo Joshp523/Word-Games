@@ -22,6 +22,12 @@ const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="ro
 async function pushOn(){try{if(!('serviceWorker' in navigator&&'PushManager' in window))return false;const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();
  if(sub){const j=sub.toJSON();sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'}).then(()=>{})}return !!sub}catch(e){return false}}
 
+/* ---------- solo games (Ogle, Categories): kept on this device only, never in the Hall of Winners ---------- */
+const soloK=k=>'wg_solo_'+k,getSolo=k=>{try{return JSON.parse(localStorage.getItem(soloK(k)))}catch(e){return null}},putSolo=g=>localStorage.setItem(soloK(g.kind),JSON.stringify(g));
+const newSolo=k=>{const g={id:'solo_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:k,seed:SEED[k](),status:'active',max_players:1,code:'SOLO-'+k.toUpperCase(),solo:true,moves:[]};putSolo(g);return g};
+const bestK=k=>'wg_best_'+k;
+async function put(payload){if(G.solo){const g=getSolo(G.kind);if(!g||g.id!=G.id)return;g.moves.push({id:g.moves.length+1,game_id:g.id,player:me,payload});putSolo(g);G=g;return{}}return sb.from('wg_moves').insert({game_id:G.id,player:me,payload})}
+
 /* ---------- login ---------- */
 function showLogin(){clearInterval(timer);G=null;me=null;document.documentElement.dataset.t=document.body.dataset.t='lobby';
  app.innerHTML=frame('Welcome','who is playing?',`<div class="row"><div class="pn"><h2>Your Name</h2><p>Type your name to see all your games, on any device. There is no password, so use the same spelling every time.</p><label for="nm">Name</label><input id="nm" maxlength="20" value="${esc(saved())}" autocomplete="name" autocapitalize="words"><button class="btn" data-a="login">Enter</button></div></div>`)}
@@ -32,7 +38,9 @@ async function init(){
 const start=()=>{if(!started){started=true;addEventListener('hashchange',route)}route()};
 async function route(){
  clearInterval(timer);if(!me)return showLogin();
- const c=location.hash.slice(1).toUpperCase();if(c.length!=4)return lobby();
+ const c=location.hash.slice(1).toUpperCase();
+ if(c.startsWith('SOLO-')){const g=getSolo(c.slice(5).toLowerCase());if(!g){location.hash='';return}G=g;key=null;lastSig='';return draw()}
+ if(c.length!=4)return lobby();
  let {data:g}=await sb.from('wg_games').select('*').eq('code',c).maybeSingle();
  if(!g){const r=await sb.rpc('wg_join_game',{p_code:c,p_name:saved()});if(r.error){alert(r.error.message);location.hash='';return}g=r.data}
  G=g;key=null;lastSig='';RB.pend=new Map();RB.sel=null;RB.ex=null;RB.sig=-1;await draw();timer=setInterval(draw,4000);
@@ -49,7 +57,7 @@ function turnOf(g,mv,pl){
  if(!did(me))return'your turn';if(!pl.every(x=>did(x.player)))return'waiting on others';
  if(c.req)return c.req.by!=me&&!c.req.acc.has(me)?'your turn':'waiting on others';return'round complete'}
 function rowLabel(x,mv,pl){const on=pl.filter(p=>p.player!=me).map(p=>esc(p.name)).join(', '),t=turnOf(x,mv,pl);
- return(on?`${KINDS[x.kind][0]} with ${on}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br><em>${t=='your turn'?'<strong>your turn</strong>':t}</em>`}
+ return(on?`${KINDS[x.kind][0]} with ${on}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br>${t=='your turn'?'<span class="yt">Your turn</span>':`<em>${t}</em>`}`}
 /* Hall of Winners: the single best result ever recorded for each game.
    Ogle, Rabble, Categories: the winner's points (first number of the score). Matches scored in rounds are skipped.
    Codemaster: the win with the most turns to spare. */
@@ -60,18 +68,20 @@ function hall(rows){return['ogle','rabble','categories','codemaster'].map(k=>{le
 async function lobby(){
  G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby';const on=await pushOn();
  const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id')]);
+ const solo=['ogle','categories'].map(getSolo).filter(x=>x&&x.status!='finished');
  const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={},GP={};
  if(vis.length){const ids=vis.map(x=>x.id),[m,p]=await Promise.all([sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',ids).order('id'),sb.from('wg_game_players').select('*').in('game_id',ids).order('seat')]);
   (m.data||[]).forEach(x=>(MV[x.game_id]=MV[x.game_id]||[]).push(x));(p.data||[]).forEach(x=>(GP[x.game_id]=GP[x.game_id]||[]).push(x))}
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
- <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
- <div class="pn"><h2>Your Games</h2>${vis.map(x=>`<div class="gm hl"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
+ <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
  <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div></div>`);
 }
 
 /* ---------- game loading ---------- */
 async function load(){
+ if(G.solo){const g=getSolo(G.kind);if(g&&g.id==G.id)G=g;moves=G.moves;disp=[];reveals=[];PL=[{player:me,name:saved(),seat:1}];names={[me]:saved()};return}
  const id=G.id,[m,d,r,g,p]=await Promise.all([sb.from('wg_moves').select('*').eq('game_id',id).order('id'),sb.from('wg_disputes').select('*').eq('game_id',id).order('id'),sb.from('wg_cm_reveals').select('*').eq('game_id',id),sb.from('wg_games').select('*').eq('id',id).single(),sb.from('wg_game_players').select('*').eq('game_id',id).order('seat')]);
  moves=m.data||[];disp=d.data||[];reveals=r.data||[];if(g.data)G=g.data;PL=p.data||[];names=Object.fromEntries(PL.map(x=>[x.player,x.name]));
  if(G.kind=='codemaster'&&G.p1==me&&!key){const {data:k}=await sb.from('wg_cm_keys').select('key').eq('game_id',id).maybeSingle();key=k&&k.key}
@@ -95,7 +105,7 @@ const finBtn=v=>G.status=='finished'?'<p><em>Game over.</em></p>':`<button class
 /* ---------- rounds (Ogle and Categories) ---------- */
 function rnds(g=G,mv=moves,pl=PL){const R=[{n:1,seed:g.seed}];let req=null,rej=null;
  for(const m of mv){const p=m.payload;
-  if(p.rematch){req={by:m.player,n:p.rematch.n,seed:p.rematch.seed,acc:new Set()};rej=null}
+  if(p.rematch){req={by:m.player,n:p.rematch.n,seed:p.rematch.seed,acc:new Set()};rej=null;if(req.n==R.length+1&&pl.every(x=>x.player==req.by)){R.push({n:req.n,seed:req.seed});req=null}}
   else if(typeof p.accept=='number'&&req&&req.n==p.accept&&req.n==R.length+1&&req.by!=m.player){req.acc.add(m.player);if(pl.every(x=>x.player==req.by||req.acc.has(x.player))){R.push({n:req.n,seed:req.seed});req=null;rej=null}}
   else if(typeof p.reject=='number'&&req&&req.n==p.reject&&req.by!=m.player){rej={...req,rb:m.player};req=null}}
  return{R,req,rej,cur:R.at(-1)}}
@@ -108,8 +118,8 @@ function scores(n){const ss=PL.map(x=>sub(n,x.player));if(ss.some(s=>!s))return 
 function tally(R){const t=Object.fromEntries(PL.map(x=>[x.player,0]));for(const r of R){const s=scores(r.n);if(!s)continue;const v=Object.values(s),mx=Math.max(...v);if(v.filter(x=>x==mx).length==1)t[Object.keys(s).find(k=>s[k]==mx)]++}return t}
 function matchBox(c,done){
  const t=tally(c.R),sc=scores(c.cur.n);
- let h=`<h2>Match</h2><p>Round ${c.cur.n} · ${PL.map(x=>`${x.player==me?'You':esc(x.name)} ${t[x.player]}`).join(' · ')}</p>`;
- if(G.status=='finished')return h+'<p><em>Match over.</em></p>';
+ let h=G.solo?`<h2>Solo Practice</h2><p>Round ${c.cur.n} · Best on this device: ${+localStorage.getItem(bestK(G.kind))||0}</p>`:`<h2>Match</h2><p>Round ${c.cur.n} · ${PL.map(x=>`${x.player==me?'You':esc(x.name)} ${t[x.player]}`).join(' · ')}</p>`;
+ if(G.status=='finished')return h+(G.solo?`<p><em>Practice over.</em></p><button class="btn" data-a="new" data-v="${G.kind}" data-solo="1">Play Again</button>`:'<p><em>Match over.</em></p>');
  if(!done)return h;
  const q=c.req;
  if(q){const wt=PL.filter(x=>x.player!=q.by&&!q.acc.has(x.player));
@@ -117,8 +127,12 @@ function matchBox(c,done){
   else if(!q.acc.has(me))h+=`<p>${nm(q.by)} wants another round.</p><button class="btn" data-a="racc">Accept</button><button class="btn ghost" data-a="rrej">Decline</button>`;
   else h+='<p><em>You accepted. Waiting for the others…</em></p>'}
  else h+=(c.rej&&c.rej.by==me?`<p><em>${nm(c.rej.rb)} declined another round.</em></p>`:'')+'<button class="btn" data-a="rnew">New Round</button>';
+ if(G.solo)return h+'<button class="btn ghost" data-a="finish" data-v="solo">End Practice</button>';
  const v=c.R.length>1?finData(t,'rounds'):finData(sc);
  return h+`<button class="btn ghost" data-a="finish" data-v="${esc(JSON.stringify(v))}">End Match</button>`}
+function solBest(sc){if(!G.solo)return'';const v=sc[me]||0,k=bestK(G.kind),seen='wg_seen_'+G.id+'_'+CUR,nw='wg_new_'+G.id+'_'+CUR;   // check each solo round once against the device best
+ if(!localStorage.getItem(seen)){localStorage.setItem(seen,1);if(v>0&&v>(+localStorage.getItem(k)||0)){localStorage.setItem(k,v);localStorage.setItem(nw,1)}}
+ return localStorage.getItem(nw)?'<p><em>A new personal best!</em></p>':''}
 const waitNames=n=>PL.filter(x=>!sub(n,x.player)).map(x=>nm(x.player)).join(', ');
 
 /* ---------- Ogle ---------- */
@@ -137,8 +151,8 @@ VIEW.ogle=()=>{
  if(!mine&&!t0)p=`<div class="pn"><h2>Ready?</h2><p>You will have ${OGLE_SECS/60} minutes once you start. Tap letters, or type words and press Enter. When the clock runs out, your words are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
  else if(!mine){const w=ow();p=`<div class="pn"><h2>Your Word</h2><label for="ot">Type a word and press Enter, or tap tiles</label><input id="ot" autocomplete="off" autocapitalize="characters" spellcheck="false"><p id="oerr" style="min-height:1.2em;margin:4px 0"></p><div class="curw">${ocur()||'&nbsp;'}</div><button class="btn" data-a="oadd">Add Word</button><button class="btn ghost" data-a="oclr">Clear</button><h2 style="margin-top:20px">Words Found (${w.length})</h2>${w.map(x=>`<div class="gm"><span>${esc(x)}</span><button class="lnk" data-a="orm" data-v="${esc(x)}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}<button class="btn" data-a="words">Submit Words</button>${lobbyBtn}</div>`}
  else if(!done)p=`<div class="pn"><h2>Submitted</h2><p><em>Waiting on ${waitNames(CUR)}…</em></p>${lobbyBtn}</div>`;
- else{const sc=scores(CUR);
-  p=`<div class="pn"><h2>Round ${CUR} Results</h2>${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} <span class="big">${sc[x.player]}</span></p>`).join('')}${PL.map(x=>{const L=sub(CUR,x.player).payload.words,O=PL.filter(y=>y.player!=x.player).flatMap(y=>sub(CUR,y.player).payload.words);return `<h2>${x.player==me?'Your':nm(x.player)+'’s'} Words</h2>${wl(L,O,x.player!=me)}`}).join('')}</div><div class="pn">${matchBox(c,true)}${lobbyBtn}</div>`}
+ else{const sc=scores(CUR),nb=solBest(sc);
+  p=`<div class="pn"><h2>Round ${CUR} Results</h2>${nb}${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} <span class="big">${sc[x.player]}</span></p>`).join('')}${PL.map(x=>{const L=sub(CUR,x.player).payload.words,O=PL.filter(y=>y.player!=x.player).flatMap(y=>sub(CUR,y.player).payload.words);return `<h2>${x.player==me?'Your':nm(x.player)+'’s'} Words</h2>${wl(L,O,x.player!=me)}`}).join('')}</div><div class="pn">${matchBox(c,true)}${lobbyBtn}</div>`}
  const last=OG.path.at(-1);
  const tiles=b.map((c,i)=>live?`<b class="${OG.path.includes(i)?(i===last?'u l':'u'):''}" data-a="otap" data-v="${i}">${c}</b>`:`<b>${t0||mine?c:'?'}</b>`).join('');
  shell(`<div class="row"><div class="bd" style="max-width:420px">${live?'<p class="big" id="cdown" style="text-align:center"></p>':''}<div class="g g4">${tiles}</div></div>${p}${done&&mine?'':mb}${dbox()}</div>`);
@@ -153,8 +167,8 @@ VIEW.categories=()=>{
  if(!mine&&!t0)p=`<div class="pn" style="max-width:560px"><h2>Ready?</h2><p>You will have ${CAT_SECS} seconds once you start. When the clock runs out, your answers are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
  else if(!mine){const dr=JSON.parse(localStorage.getItem(K('rr_d_'))||'[]');p=`<div class="pn" style="max-width:560px"><h2>Your Answers</h2>${cats.map((c,i)=>`<label for="a${i}">${i+1}. ${esc(c)}</label><input id="a${i}" class="ans" autocomplete="off" value="${esc(dr[i]||'')}">`).join('')}<button class="btn" data-a="answers">Seal &amp; Send</button>${lobbyBtn}</div>`}
  else if(!done)p=`<div class="pn"><h2>Sealed</h2><p><em>Waiting on ${waitNames(CUR)}…</em></p>${lobbyBtn}</div>`;
- else{const sc=scores(CUR);
-  p=`<div class="pn" style="max-width:560px"><h2>Round ${CUR} Results</h2>${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} <span class="big">${sc[x.player]}</span></p>`).join('')}${cats.map((cat,i)=>`<div class="hl"><p><em>${esc(cat)}</em></p>${PL.map(x=>{const a=sub(CUR,x.player).payload.answers[i];return `<div class="gm"><span>${x.player==me?'You':nm(x.player)}: ${esc(a||'—')}</span>${a&&x.player!=me?dbtn(a.toLowerCase()):''}</div>`}).join('')}</div>`).join('')}</div><div class="pn">${matchBox(c,true)}${lobbyBtn}</div>`}
+ else{const sc=scores(CUR),nb=solBest(sc);
+  p=`<div class="pn" style="max-width:560px"><h2>Round ${CUR} Results</h2>${nb}${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} <span class="big">${sc[x.player]}</span></p>`).join('')}${cats.map((cat,i)=>`<div class="hl"><p><em>${esc(cat)}</em></p>${PL.map(x=>{const a=sub(CUR,x.player).payload.answers[i];return `<div class="gm"><span>${x.player==me?'You':nm(x.player)}: ${esc(a||'—')}</span>${a&&x.player!=me?dbtn(a.toLowerCase()):''}</div>`}).join('')}</div>`).join('')}</div><div class="pn">${matchBox(c,true)}${lobbyBtn}</div>`}
  shell(`<div class="row"><div class="pn" style="max-width:260px;text-align:center"><h2>The Letter Is</h2><div class="lt">${mine||t0?letter:'?'}</div>${!mine&&t0?'<p class="big" id="cdown"></p>':''}</div>${p}${done&&mine?'':mb}${dbox()}</div>`);
 };
 
@@ -213,14 +227,22 @@ VIEW.rabble=()=>{
  const used=new Set([...RB.pend.values()].map(v=>v.ri)),open=disp.some(d=>!d.verdict&&d.raised_by==me),lw=S.lastRaw&&S.lastRaw.player!=me&&S.lastRaw.payload.play?S.lastRaw.payload:null;
  const cells=[...Array(225).keys()].map(i=>{const t=RB.pend.get(i);if(t)return `<b class="p" data-a="rpick" data-v="${i}">${t.l}<small>${t.b?0:TV[t.l]}</small></b>`;const b=S.board[i];if(b)return `<b>${b.l}<small>${b.b?0:TV[b.l]}</small></b>`;return `<i class="${PREM[i]||''}" data-a="rput" data-v="${i}"></i>`}).join('');
  const rack=(S.racks[me]||[]).map((l,ri)=>used.has(ri)?'':`<b class="${(RB.ex?RB.ex.has(ri):RB.sel===ri)?'s':''}" data-a="rsel" data-v="${ri}">${l=='?'?'_':l}<small>${TV[l]}</small></b>`).join('');
+ const pv=mine&&!open&&!RB.ex&&RB.pend.size?rscore(S.board,RB.pend):null;   // live score while tiles sit on the board
+ const pvl=pv?`<div class="pv${pv.err?' bad':''}">${pv.err?esc(pv.err):`${pv.words.map(esc).join(' + ')} <span>${pv.score} point${pv.score==1?'':'s'}</span>${RB.pend.size==7?' <em>(with the 50-point bonus)</em>':''}`}</div>`:'';
  let ctl;
  if(S.over||G.status=='finished')ctl=finBtn(finData(S.tot));
  else if(!mine)ctl=`<p><em>Waiting on ${nm(S.turn)}…</em></p>`;
  else if(open)ctl='<p><em>Settle your dispute first.</em></p>';
  else if(RB.ex)ctl=`<p>Tap the tiles you want to swap.</p><button class="btn" data-a="rexch">Swap ${RB.ex.size} Tile${RB.ex.size==1?'':'s'}</button><button class="btn ghost" data-a="rexc">Cancel</button>`;
- else ctl=`<button class="btn" data-a="rplay">Play Word</button><button class="btn ghost" data-a="rrecall">Recall Tiles</button>${S.left>=7?'<button class="btn ghost" data-a="rexmode">Exchange Tiles</button>':'<p><em>Exchanging needs 7 or more tiles in the bag.</em></p>'}<button class="btn ghost" data-a="rpass">Pass Turn</button>`;
- const dl=mine&&!open&&lw&&lw.words?`<h2>Last Play</h2><p>${nm(S.lastRaw.player)} played for ${lw.score}.</p>${lw.words.map(w=>`<div class="gm"><span>${esc(w)}</span>${dbtn(w)}</div>`).join('')}`:S.lastRaw&&S.lastRaw.payload.exch?`<p><em>${nm(S.lastRaw.player)} exchanged tiles.</em></p>`:'';
- shell(`<div class="row"><div class="bd" style="max-width:600px"><div class="g g15">${cells}</div><div class="key"><span><i class="tw"></i>Triple Word</span><span><i class="dw"></i>Double Word</span><span><i class="tl"></i>Triple Letter</span><span><i class="dl"></i>Double Letter</span></div><div class="rack">${rack}</div></div><div class="pn"><h2>Scores</h2>${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} — <span class="big">${S.tot[x.player]}</span>${S.turn==x.player&&!S.over?' (to play)':''}</p>`).join('')}<p>Tiles in bag: ${S.left}</p>${dl}${ctl}${lobbyBtn}</div>${dbox()}</div>`);
+ else ctl=`<button class="btn" data-a="rplay">${pv&&!pv.err?`Play for ${pv.score}`:'Play Word'}</button><button class="btn ghost" data-a="rrecall">Recall Tiles</button>${S.left>=7?'<button class="btn ghost" data-a="rexmode">Exchange Tiles</button>':'<p><em>Exchanging needs 7 or more tiles in the bag.</em></p>'}<button class="btn ghost" data-a="rpass">Pass Turn</button>`;
+ const lp=S.lastRaw&&S.lastRaw.payload,lb=S.lastRaw&&S.lastRaw.player,lwho=lb==me?'You':nm(lb);
+ let dl='';
+ if(lp&&lp.play&&lp.words){const bad=lp.words.some(fk),sc=bad?0:lp.score;
+  dl=`<h2 style="margin-top:18px">Last Play</h2><p>${lwho} played <strong>${esc(lp.words[0])}</strong> for <span class="big lpn">${sc}</span> point${sc==1?'':'s'}${lp.play.length==7?' (all seven tiles, +50)':''}.</p>${bad?'<p><em>Ruled not a word, so no points.</em></p>':''}`
+   +(mine&&!open&&lw?lp.words.map(w=>`<div class="gm"><span>${esc(w)}</span>${dbtn(w)}</div>`).join(''):lp.words.length>1?`<p><em>Also made ${lp.words.slice(1).map(esc).join(', ')}.</em></p>`:'')}
+ else if(lp&&lp.exch)dl=`<p><em>${lwho} exchanged tiles.</em></p>`;
+ else if(lp&&lp.pass)dl=`<p><em>${lwho} passed.</em></p>`;
+ shell(`<div class="row"><div class="bd" style="max-width:600px"><div class="g g15">${cells}</div><div class="key"><span><i class="tw"></i>Triple Word</span><span><i class="dw"></i>Double Word</span><span><i class="tl"></i>Triple Letter</span><span><i class="dl"></i>Double Letter</span></div><div class="rack">${rack}</div>${pvl}</div><div class="pn"><h2>Scores</h2>${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} — <span class="big">${S.tot[x.player]}</span>${S.turn==x.player&&!S.over?' (to play)':''}</p>`).join('')}<p>Tiles in bag: ${S.left}</p>${dl}${ctl}${lobbyBtn}</div>${dbox()}</div>`);
 };
 
 /* ---------- actions ---------- */
@@ -228,9 +250,11 @@ const trace=(w,b)=>{const u=[],f=(k,l)=>{if(k==w.length)return true;for(let i=0;
 const ACT={
  async login(){const n=$('#nm').value.trim();if(!n)return alert('Please enter your name.');if(await login(n))start()},
  logout(){localStorage.removeItem('rr_name');showLogin()},
- async new(k){const np=k=='codemaster'?2:+$('#np').value;const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:np});if(error)return alert(error.message);location.hash=data.code},
+ async new(k,t){const np=k=='codemaster'?2:t&&t.dataset.solo?1:+$('#np').value;
+  if(np==1){if(!['ogle','categories'].includes(k))return alert(KINDS[k][0]+' needs at least 2 players. Solo practice is for Ogle and Categories.');const g=newSolo(k);if(location.hash=='#'+g.code)return route();location.hash=g.code;return}const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:np});if(error)return alert(error.message);location.hash=data.code},
  join(){const c=$('#jc').value.trim().toUpperCase();if(c.length==4)location.hash=c},
  async copy(){await navigator.clipboard.writeText(location.origin+location.pathname+'#'+G.code);alert('Invite link copied')},
+ hidesolo(v){if(!confirm('Remove this practice game?'))return;localStorage.removeItem(soloK(v));lobby()},
  async hide(v){if(!confirm('Remove this game from your list? Other players keep it.'))return;
   localStorage.setItem('rr_hid',JSON.stringify([...new Set([...hidLocal(),v])]));sb.from('wg_hidden').insert({game_id:v,player:me}).then(()=>{});lobby()},
  async push(){if(!('serviceWorker' in navigator&&'PushManager' in window))return alert('On iPhone: tap Share → Add to Home Screen, then open the game from your home screen and try again.');
@@ -245,13 +269,13 @@ const ACT={
  oclr(){OG.path=[];VIEW.ogle()},
  orm(v){localStorage.setItem(K('rr_ow_'),JSON.stringify(ow().filter(w=>w!=v)));VIEW.ogle()},
  async words(v,t,auto){if(sub(CUR,me))return;const w=ow(),c=ocur();if(c.length>=3&&!w.includes(c))w.push(c);
-  await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{words:w,r:CUR}});OG.path=[];refresh()},
+  await put({words:w,r:CUR});OG.path=[];refresh()},
  async answers(v,t,auto){if(!document.querySelector('.ans')||sub(CUR,me))return;const L=rnds().cur.seed.letter,inp=[...document.querySelectorAll('.ans')],a=inp.map(i=>i.value.trim()).map(x=>x&&x[0].toUpperCase()==L?x:'');
   if(inp.some((i,k)=>i.value.trim()&&!a[k])&&!auto&&!confirm('Some answers don’t start with '+L+' and will be dropped. Send anyway?'))return;
-  await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{answers:a,r:CUR}});refresh()},
+  await put({answers:a,r:CUR});refresh()},
  async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
  async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
- async rnew(){const n=rnds().R.length+1;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}}});refresh()},
+ async rnew(){const n=rnds().R.length+1;await put({rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}});refresh()},
  async racc(){const q=rnds().req;if(!q)return;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{accept:q.n}});refresh()},
  async rrej(){const q=rnds().req;if(!q)return;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{reject:q.n}});refresh()},
  async clue(){const c=$('#cl').value.trim().toUpperCase(),n=+$('#cn').value;
@@ -262,7 +286,7 @@ const ACT={
  async cmrq(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{rematch:true}});refresh()},
  async cmrej(){await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{reject:true}});refresh()},
  async cmacc(){const {data,error}=await sb.rpc('wg_cm_rematch',{p_game:G.id,p_seed:SEED.codemaster()});if(error)return alert(error.message);location.hash=data.code},
- async finish(v){let w=null,s=null;if(v!='lost'){const o=JSON.parse(v);w=o.w;s=o.s}await sb.rpc('wg_finish_game',{p_game:G.id,p_victors:w,p_score:s});refresh()},
+ async finish(v){if(G.solo){const g=getSolo(G.kind);if(g&&g.id==G.id){g.status='finished';putSolo(g)}return refresh()}let w=null,s=null;if(v!='lost'){const o=JSON.parse(v);w=o.w;s=o.s}await sb.rpc('wg_finish_game',{p_game:G.id,p_victors:w,p_score:s});refresh()},
  rsel(v){const i=+v;if(RB.ex){RB.ex.has(i)?RB.ex.delete(i):RB.ex.add(i)}else RB.sel=RB.sel===i?null:i;VIEW.rabble()},
  rput(v){const S=rstate();if(RB.ex||RB.sel==null||S.turn!=me||S.over)return;let l=S.racks[me][RB.sel],b=0;if(l=='?'){l=(prompt('Which letter should the blank be?')||'').toUpperCase().slice(0,1);if(!/[A-Z]/.test(l))return;b=1}RB.pend.set(+v,{l,b,ri:RB.sel});RB.sel=null;VIEW.rabble()},
  rpick(v){RB.pend.delete(+v);VIEW.rabble()},
