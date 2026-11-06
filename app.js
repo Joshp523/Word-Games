@@ -22,6 +22,32 @@ const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="ro
 async function pushOn(){try{if(!('serviceWorker' in navigator&&'PushManager' in window))return false;const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();
  if(sub){const j=sub.toJSON();sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'}).then(()=>{})}return !!sub}catch(e){return false}}
 
+async function subscribe(){try{
+ const reg=await navigator.serviceWorker.register('sw.js');if(await Notification.requestPermission()!='granted')return 'Notifications are blocked for this site. You can allow them in Settings → Notifications.';
+ const u=VAPID_PUBLIC_KEY.replace(/-/g,'+').replace(/_/g,'/'),raw=atob(u+'='.repeat((4-u.length%4)%4));
+ const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))}),j=sub.toJSON();
+ const {error}=await sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'});return error?error.message:null}catch(e){return e.message||'Could not turn on alerts.'}}
+
+/* ---------- phone prompts: add to home screen, then turn alerts (shown once in a while, never on a computer) ---------- */
+const UA=navigator.userAgent,IOS=/iPhone|iPad|iPod/.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1),PHONE=IOS||/Android/i.test(UA);
+const STANDALONE=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+let BIP=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();BIP=e});
+const snoozed=k=>+(localStorage.getItem('wg_snooze_'+k)||0)>Date.now(),snooze=(k,d)=>localStorage.setItem('wg_snooze_'+k,Date.now()+d*864e5);
+const SHARE='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5v10h14V11h-1"/></svg>';
+function sheet(h){closeSheet();const d=document.createElement('div');d.id='sheet';d.innerHTML=`<div class="sh-bg" data-a="sheetx"></div><div class="sh pn" role="dialog" aria-modal="true">${h}</div>`;document.body.appendChild(d);requestAnimationFrame(()=>d.classList.add('on'))}
+const closeSheet=()=>{const d=document.getElementById('sheet');if(d)d.remove()};
+async function nudge(on){
+ if(!PHONE||document.getElementById('sheet'))return;
+ const canPush='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+ if(!STANDALONE()&&!snoozed('install')){
+  const how=IOS?`<ol class="sh-steps"><li>Tap the Share button ${SHARE} at the bottom of Safari.</li><li>Scroll down and tap <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong>, then open Word Games from your home screen.</li></ol>`
+   :BIP?'':`<ol class="sh-steps"><li>Tap the <strong>⋮</strong> menu at the top of the browser.</li><li>Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.</li></ol>`;
+  return sheet(`<h2>Keep Word Games on Your Phone</h2><p>Put it on your home screen and it opens like an app, full screen. It’s also the only way your phone can tell you when it’s your turn.</p>${how}${BIP?'<button class="btn" data-a="install">Add to Home Screen</button>':''}<button class="btn ghost" data-a="later" data-v="install">Not Now</button>`)}
+ if(on||!canPush||Notification.permission=='denied'||!VAPID_PUBLIC_KEY||VAPID_PUBLIC_KEY.startsWith('YOUR'))return;
+ if(Notification.permission=='granted'){if(!await subscribe())lobby();return}   // already allowed once: switch alerts on quietly
+ if(snoozed('alerts'))return;
+ sheet(`<h2>Never Miss Your Turn</h2><p>Your phone will let you know when someone plays a word, joins your game, or the results are in. Nothing else.</p><button class="btn" data-a="alertson">Turn On Turn Alerts</button><button class="btn ghost" data-a="later" data-v="alerts">Not Now</button>`)}
+
 /* ---------- solo games (Ogle, Categories): kept on this device only, never in the Hall of Winners ---------- */
 const soloK=k=>'wg_solo_'+k,getSolo=k=>{try{return JSON.parse(localStorage.getItem(soloK(k)))}catch(e){return null}},putSolo=g=>localStorage.setItem(soloK(g.kind),JSON.stringify(g));
 const newSolo=k=>{const g={id:'solo_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:k,seed:SEED[k](),status:'active',max_players:1,code:'SOLO-'+k.toUpperCase(),solo:true,moves:[]};putSolo(g);return g};
@@ -77,6 +103,7 @@ async function lobby(){
  <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
  <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
  <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div></div>`);
+ setTimeout(()=>nudge(on),900);
 }
 
 /* ---------- game loading ---------- */
@@ -198,13 +225,13 @@ function rstate(){
  const q=bag.slice(n*7);let passes=0,last=null,raw=null;
  for(const m of moves){const p=m.payload;if(!(p.play||p.pass||p.exch))continue;raw=m;const r=racks[m.player];if(!r)continue;
   if(p.pass){passes++;continue}
-  if(p.exch){for(const l of p.exch){const i=r.indexOf(l);if(i>=0)r.splice(i,1)}r.push(...q.splice(0,p.exch.length));q.push(...p.exch);passes++;continue}
+  if(p.exch){for(const l of p.exch){const i=r.indexOf(l);if(i>=0)r.splice(i,1)}r.push(...q.splice(0,p.exch.length));q.push(...p.exch);passes=0;continue}
   if(p.words&&p.words.some(fk))continue;
   passes=0;for(const t of p.play){board[t.r*15+t.c]={l:t.l,b:t.b};const i=r.indexOf(t.b?'?':t.l);if(i>=0)r.splice(i,1)}
   r.push(...q.splice(0,p.play.length));sc[m.player]+=p.score;last=m}
- const sum=r=>r.reduce((s,l)=>s+TV[l],0),out=q.length==0&&ids.find(id=>!racks[id].length),over=passes>=6||!!out,tot={...sc};
+ const sum=r=>r.reduce((s,l)=>s+TV[l],0),out=q.length==0&&ids.find(id=>!racks[id].length),over=passes>=2*n||!!out,tot={...sc};
  if(over){ids.forEach(id=>tot[id]-=sum(racks[id]));if(out)tot[out]+=ids.reduce((s,id)=>s+(id==out?0:sum(racks[id])),0)}
- return{board,racks,tot,left:q.length,over,last,lastRaw:raw,turn:raw?ids[(ids.indexOf(raw.player)+1)%n]:ids[0]}
+ return{board,racks,tot,left:q.length,over,passes,byPass:over&&!out,last,lastRaw:raw,turn:raw?ids[(ids.indexOf(raw.player)+1)%n]:ids[0]}
 }
 function rscore(board,pend){
  const at=i=>pend.get(i)||board[i],idx=[...pend.keys()];if(!idx.length)return{err:'Place some tiles first.'};
@@ -242,6 +269,8 @@ VIEW.rabble=()=>{
    +(mine&&!open&&lw?lp.words.map(w=>`<div class="gm"><span>${esc(w)}</span>${dbtn(w)}</div>`).join(''):lp.words.length>1?`<p><em>Also made ${lp.words.slice(1).map(esc).join(', ')}.</em></p>`:'')}
  else if(lp&&lp.exch)dl=`<p><em>${lwho} exchanged tiles.</em></p>`;
  else if(lp&&lp.pass)dl=`<p><em>${lwho} passed.</em></p>`;
+ if(S.byPass)dl+=`<p><strong>Everyone passed twice in a row, so the game is over.</strong> Tiles left on each rack are taken off that player’s score.</p>`;
+ else if(S.passes&&!S.over)dl+=`<p><em>${S.passes} pass${S.passes==1?'':'es'} in a row. The game ends after ${2*PL.length}.</em></p>`;
  shell(`<div class="row"><div class="bd" style="max-width:600px"><div class="g g15">${cells}</div><div class="key"><span><i class="tw"></i>Triple Word</span><span><i class="dw"></i>Double Word</span><span><i class="tl"></i>Triple Letter</span><span><i class="dl"></i>Double Letter</span></div><div class="rack">${rack}</div>${pvl}</div><div class="pn"><h2>Scores</h2>${PL.map(x=>`<p>${x.player==me?'You':nm(x.player)} — <span class="big">${S.tot[x.player]}</span>${S.turn==x.player&&!S.over?' (to play)':''}</p>`).join('')}<p>Tiles in bag: ${S.left}</p>${dl}${ctl}${lobbyBtn}</div>${dbox()}</div>`);
 };
 
@@ -257,12 +286,13 @@ const ACT={
  hidesolo(v){if(!confirm('Remove this practice game?'))return;localStorage.removeItem(soloK(v));lobby()},
  async hide(v){if(!confirm('Remove this game from your list? Other players keep it.'))return;
   localStorage.setItem('rr_hid',JSON.stringify([...new Set([...hidLocal(),v])]));sb.from('wg_hidden').insert({game_id:v,player:me}).then(()=>{});lobby()},
+ sheetx(){closeSheet()},
+ later(v){snooze(v,v=='install'?5:7);closeSheet()},
+ async install(){if(!BIP)return;BIP.prompt();const r=await BIP.userChoice;BIP=null;closeSheet();if(r.outcome!='accepted')snooze('install',5)},
+ async alertson(){const b=document.querySelector('[data-a=alertson]');if(b){b.disabled=true;b.textContent='One moment…'}const e=await subscribe();if(e){sheet(`<h2>Alerts Are Off</h2><p>${esc(e)}</p><button class="btn" data-a="sheetx">OK</button>`);snooze('alerts',7)}else{sheet('<h2>You’re All Set</h2><p>We’ll tell you when it’s your turn.</p><button class="btn" data-a="sheetx">Lovely</button>');lobby()}},
  async push(){if(!('serviceWorker' in navigator&&'PushManager' in window))return alert('On iPhone: tap Share → Add to Home Screen, then open the game from your home screen and try again.');
   if(!VAPID_PUBLIC_KEY||VAPID_PUBLIC_KEY.startsWith('YOUR'))return alert('Add your VAPID public key to config.js first.');
-  const reg=await navigator.serviceWorker.register('sw.js');if(await Notification.requestPermission()!='granted')return alert('Notifications are blocked for this site.');
-  const u=VAPID_PUBLIC_KEY.replace(/-/g,'+').replace(/_/g,'/'),raw=atob(u+'='.repeat((4-u.length%4)%4));
-  const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))}),j=sub.toJSON();
-  const {error}=await sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'});alert(error?error.message:'Turn alerts are on.');if(!error)lobby()},
+  const e=await subscribe();alert(e||'Turn alerts are on.');if(!e)lobby()},
  start(){localStorage.setItem(K('rr_t_'),Date.now());VIEW[G.kind]()},
  otap(v){const i=+v,l=OG.path.at(-1);if(OG.path.length&&i===l)OG.path.pop();else if(OG.path.includes(i))return;else if(!OG.path.length||adj(l,i))OG.path.push(i);else return;ogPaint()},
  oadd(){const w=ocur();if(w.length<3)return alert('Words need at least 3 letters.');const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle()},
@@ -296,7 +326,8 @@ const ACT={
  async rexch(){const S=rstate();if(!RB.ex||!RB.ex.size)return alert('Tap the tiles you want to swap first.');if(S.left<7)return alert('Exchanging needs 7 or more tiles in the bag.');
   const L=[...RB.ex].map(i=>S.racks[me][i]);await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{exch:L}});RB.ex=null;refresh()},
  async rplay(){const S=rstate(),r=rscore(S.board,RB.pend);if(r.err)return alert(r.err);await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{play:[...RB.pend].map(([i,t])=>({r:i/15|0,c:i%15,l:t.l,b:t.b})),words:r.words,score:r.score}});refresh()},
- async rpass(){if(!confirm('Pass your turn?'))return;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{pass:true}});refresh()}
+ async rpass(){const S=rstate(),last=S.passes+1>=2*PL.length;if(!confirm(last?'Everyone else has passed twice. If you pass too, the game ends now. Pass?':'Pass your turn?'))return;await sb.from('wg_moves').insert({game_id:G.id,player:me,payload:{pass:true}});await refresh();
+  if(last){const T=rstate();if(T.over&&G.status!='finished')await ACT.finish(JSON.stringify(finData(T.tot)))}}
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(t&&!t.disabled)ACT[t.dataset.a](t.dataset.v,t)});
 document.addEventListener('input',e=>{

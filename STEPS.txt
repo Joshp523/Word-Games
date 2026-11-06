@@ -1,0 +1,10 @@
+WORD GAMES — what's new
+• Rabble ends automatically when every player passes twice in a row (exchanges don't count as passes).
+  The 2nd-to-last pass shows a count, and the final pass asks "this ends the game?" first.
+• On phones, the lobby gently offers (once every few days): 1) Add to Home Screen, with steps for iPhone or Android;
+  2) once it's on the home screen, a one-tap "Turn On Turn Alerts". If alerts were allowed before, they switch on silently.
+
+STEPS
+1. GitHub → Word-Games repo → Add file → Upload files: app.js and style.css. Commit.
+2. Supabase (Word Games / Riley Rag project) → Edge Functions → wg-notify → Code: replace everything with index.ts → Deploy.
+3. Only if you haven't already: SQL Editor → paste wg_patch_alerts.sql → Run.

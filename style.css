@@ -77,3 +77,11 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 [data-t=codemaster] .cn,[data-t=codemaster] .fr>.o{color:#17130a;filter:drop-shadow(0 1px 1px rgba(255,240,190,.45))}
 [data-t=codemaster] .fr>h1{color:#17130a;text-shadow:0 1px 0 rgba(255,240,190,.5)}
 [data-t=codemaster] .fr>.sub{color:#17130a;text-shadow:none}
+/* phone prompts: add to home screen, turn alerts */
+#sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;font-family:'Cormorant Garamond',Georgia,serif;font-size:20px;color:var(--ink)}
+#sheet .sh-bg{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .3s}
+#sheet .sh{position:relative;width:min(100% - 24px,440px);max-width:none;margin:0 0 max(14px,env(safe-area-inset-bottom,0px));text-align:left;transform:translateY(40px);opacity:0;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .3s}
+#sheet.on .sh-bg{opacity:1}#sheet.on .sh{transform:none;opacity:1}
+#sheet .sh h2{font-size:22px}
+.sh-steps{margin:10px 0 4px;padding-left:24px}.sh-steps li{margin:6px 0}.sh-steps svg{color:var(--go)}
+@media (prefers-reduced-motion:reduce){#sheet .sh,#sheet .sh-bg{transition:none}}
