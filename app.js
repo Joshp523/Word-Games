@@ -366,3 +366,26 @@ function tick(){if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+
  if(left==0&&!sending){sending=true;ACT[G.kind=='ogle'?'words':'answers'](null,null,true).finally(()=>sending=false)}}
 setInterval(tick,1000);
 init();
+
+// ---- Tiles drawn as pictures ----
+// Some Android browsers repaint pages in their own dark mode: they lighten dark text but can leave the
+// beige tile colour alone, which made letters vanish. A picture of the whole tile (beige + letter) is
+// either left alone or flipped as a whole, so the letter always stays readable.
+const TILE={};
+function tileImg(txt,sc,bg,w,h,fs,ss){const dpr=Math.min(3,window.devicePixelRatio||1),k=[txt,sc,bg,w,h,fs,ss,dpr].join('|');if(TILE[k])return TILE[k];
+ const c=document.createElement('canvas');c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);const x=c.getContext('2d');x.scale(dpr,dpr);
+ const r=3;x.fillStyle=bg;x.beginPath();x.moveTo(r,0);x.arcTo(w,0,w,h,r);x.arcTo(w,h,0,h,r);x.arcTo(0,h,0,0,r);x.arcTo(0,0,w,0,r);x.closePath();x.fill();
+ x.fillStyle='#1d0a0f';x.textAlign='center';x.textBaseline='middle';x.font=`700 ${fs}px 'Cinzel Decorative',serif`;x.fillText(txt,w/2,h/2+fs*.05);
+ if(sc!==''){x.font=`600 ${ss}px 'Cormorant Garamond',serif`;x.textAlign='right';x.textBaseline='alphabetic';x.fillText(sc,w-2,h-1.5)}
+ return TILE[k]=c.toDataURL('image/png')}
+function paintTiles(){const root=document.getElementById('app');if(!root)return;
+ for(const b of root.querySelectorAll('.g b,.rack b')){const w=b.clientWidth,h=b.clientHeight;if(!w||!h)continue;
+  const sm=b.querySelector('small'),sc=sm?sm.textContent.trim():'',txt=[...b.childNodes].filter(n=>n.nodeType==3).map(n=>n.data).join('').trim();
+  const bg=b.classList.contains('p')||b.classList.contains('u')?'#ffe7a8':'#f3e6c8',fs=parseFloat(getComputedStyle(b).fontSize)||16,ss=sm?parseFloat(getComputedStyle(sm).fontSize)||9:0;
+  const k=[txt,sc,bg,w,h,fs,ss].join('|');if(b.dataset.tk===k)continue;b.dataset.tk=k;
+  b.style.backgroundImage=`url(${tileImg(txt,sc,bg,w,h,fs,ss)})`;b.classList.add('pic')}}
+let tileRaf=0;const tilesSoon=()=>{if(!tileRaf)tileRaf=requestAnimationFrame(()=>{tileRaf=0;paintTiles()})};
+new MutationObserver(tilesSoon).observe(document.getElementById('app'),{childList:true,subtree:true,characterData:true});
+addEventListener('resize',tilesSoon);
+if(document.fonts)document.fonts.ready.then(()=>{for(const k in TILE)delete TILE[k];document.querySelectorAll('[data-tk]').forEach(b=>delete b.dataset.tk);paintTiles()});
+tilesSoon();

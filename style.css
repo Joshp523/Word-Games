@@ -92,9 +92,12 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 
 /* Our own dark styles: browsers that look for them use these instead of recolouring the page. */
 @media (prefers-color-scheme:dark){
- .g b,.rack b{background:#f3e6c8!important;color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
- .g b small,.rack b small{color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
- .g15 b.p{background:#ffe7a8!important}
+ .g b:not(.pic),.rack b:not(.pic){background-color:#f3e6c8!important;color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
+ .g b:not(.pic) small,.rack b:not(.pic) small{color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
+ .g15 b.p:not(.pic),.g4 b.u:not(.pic){background-color:#ffe7a8!important}
 }
 /* tile letters: always a deep ink, whatever theme the game uses */
 .g b,.rack b{color:#1d0a0f;-webkit-text-fill-color:#1d0a0f}
+/* tiles drawn as pictures (see paintTiles in app.js): hide the live text, keep it for screen readers */
+.g b.pic,.rack b.pic{background-color:transparent!important;background-size:100% 100%!important;background-repeat:no-repeat!important;color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important}
+.g b.pic small,.rack b.pic small{color:transparent!important;-webkit-text-fill-color:transparent!important}
