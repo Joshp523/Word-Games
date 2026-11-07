@@ -108,6 +108,7 @@ async function lobby(){
 
 /* ---------- game loading ---------- */
 async function load(){
+ loadExt();
  if(G.solo){const g=getSolo(G.kind);if(g&&g.id==G.id)G=g;moves=G.moves;disp=[];reveals=[];PL=[{player:me,name:saved(),seat:1}];names={[me]:saved()};return}
  const id=G.id,[m,d,r,g,p]=await Promise.all([sb.from('wg_moves').select('*').eq('game_id',id).order('id'),sb.from('wg_disputes').select('*').eq('game_id',id).order('id'),sb.from('wg_cm_reveals').select('*').eq('game_id',id),sb.from('wg_games').select('*').eq('id',id).single(),sb.from('wg_game_players').select('*').eq('game_id',id).order('seat')]);
  moves=m.data||[];disp=d.data||[];reveals=r.data||[];if(g.data)G=g.data;PL=p.data||[];names=Object.fromEntries(PL.map(x=>[x.player,x.name]));
@@ -121,7 +122,18 @@ async function draw(){
 const refresh=async()=>{lastSig='';await draw()};
 const wait=()=>shell(`<div class="row"><div class="pn"><h2>Invite Players</h2><p>${PL.length} of ${G.max_players} have joined.</p><div class="code">${G.code}</div><p>Send them this link, or the code:</p><input readonly value="${location.origin+location.pathname}#${G.code}"><button class="btn" data-a="copy">Copy Invite Link</button><a class="btn ghost" href="#">Return to Lobby</a></div></div>`);
 const fk=i=>disp.some(d=>d.item==i&&d.verdict=='fake');
-const dbtn=i=>disp.some(d=>d.item==i)?'<em>disputed</em>':`<button class="lnk" data-a="dispute" data-v="${esc(i)}">Dispute</button>`;
+/* WORD LIST: ENABLE (public domain, ~173,000 words) plus the official two-letter words added since (QI, ZA, KI, OK, EW…).
+   Rabble plays and Ogle words must be in it. If a word is refused, the player can look it up on Merriam-Webster's free Scrabble
+   dictionary and tap "It's a Real Word": that adds it to a shared list of extra words (Supabase table wg_words) for everyone.
+   Categories keeps its Dispute button. */
+let DICT=null,EXT=new Set(JSON.parse(localStorage.getItem('wg_extra')||'[]')),extAt=0;
+const LOOK=w=>'https://scrabble.merriam.com/finder/'+encodeURIComponent(w.toLowerCase());
+async function loadExt(){if(Date.now()-extAt<30000||!sb||!me)return;extAt=Date.now();try{const {data}=await sb.from('wg_words').select('word');(data||[]).forEach(x=>EXT.add(x.word.toUpperCase()))}catch(e){}}
+const fixW=w=>`<a class="lnk" target="_blank" rel="noopener" href="${LOOK(w)}">Look It Up</a> <button class="lnk" data-a="realw" data-v="${esc(w)}">It’s a Real Word</button>`;
+const loadDict=()=>fetch('words.txt').then(r=>r.ok?r.text():Promise.reject()).then(t=>{DICT=new Set(t.split('\n').map(x=>x.trim().toUpperCase()).filter(Boolean));if(G&&G.kind=='rabble')VIEW.rabble()}).catch(()=>setTimeout(loadDict,5000));
+loadDict();
+const okW=w=>!!DICT&&(DICT.has(w.toUpperCase())||EXT.has(w.toUpperCase())),WAIT='The word list is still loading. Try again in a moment.';
+const dbtn=i=>G&&G.kind!='categories'?'':disp.some(d=>d.item==i)?'<em>disputed</em>':`<button class="lnk" data-a="dispute" data-v="${esc(i)}">Dispute</button>`;
 const dbox=()=>disp.filter(d=>!d.verdict).map(d=>d.raised_by==me?`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p>Look it up, then give your verdict.</p><a class="btn ghost" target="_blank" rel="noopener" href="https://www.google.com/search?q=define+${encodeURIComponent(d.item)}">Look It Up</a><button class="btn" data-a="rule" data-v="real" data-id="${d.id}">It’s a Real Word</button><button class="btn ghost" data-a="rule" data-v="fake" data-id="${d.id}">It’s Not a Word</button></div>`:`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p><em>${nm(d.raised_by)} is checking this one…</em></p></div>`).join('');
 const lobbyBtn='<a class="btn ghost" href="#">Return to Lobby</a>';
 const pts=w=>w.length>=8?11:[0,0,0,1,1,2,3,5][w.length];
@@ -246,7 +258,10 @@ function rscore(board,pend){
  else if(!W.some(w=>w.some(k=>!pend.has(k))))return{err:'Your word must connect to tiles already on the board.'};
  let total=idx.length==7?50:0;
  for(const w of W){let s=0,m=1;for(const k of w){const t=at(k);let v=t.b?0:TV[t.l];if(pend.has(k)){const p=PREM[k];if(p=='tl')v*=3;if(p=='dl')v*=2;if(p=='dw')m*=2;if(p=='tw')m*=3}s+=v}total+=s*m}
- return{score:total,words:W.map(w=>w.map(k=>at(k).l).join(''))}
+ const words=W.map(w=>w.map(k=>at(k).l).join(''));if(!DICT)return{err:WAIT};
+ const bad=words.filter(w=>!okW(w));
+ if(bad.length)return{err:`${bad.join(', ')} ${bad.length>1?'aren’t':'isn’t'} in the word list.`,bad};
+ return{score:total,words}
 }
 VIEW.rabble=()=>{
  if(G.status=='waiting')return wait();
@@ -255,7 +270,7 @@ VIEW.rabble=()=>{
  const cells=[...Array(225).keys()].map(i=>{const t=RB.pend.get(i);if(t)return `<b class="p" data-a="rpick" data-v="${i}">${t.l}<small>${t.b?0:TV[t.l]}</small></b>`;const b=S.board[i];if(b)return `<b>${b.l}<small>${b.b?0:TV[b.l]}</small></b>`;return `<i class="${PREM[i]||''}" data-a="rput" data-v="${i}"></i>`}).join('');
  const rack=(S.racks[me]||[]).map((l,ri)=>used.has(ri)?'':`<b class="${(RB.ex?RB.ex.has(ri):RB.sel===ri)?'s':''}" data-a="rsel" data-v="${ri}">${l=='?'?'_':l}<small>${TV[l]}</small></b>`).join('');
  const pv=mine&&!open&&!RB.ex&&RB.pend.size?rscore(S.board,RB.pend):null;   // live score while tiles sit on the board
- const pvl=pv?`<div class="pv${pv.err?' bad':''}">${pv.err?esc(pv.err):`${pv.words.map(esc).join(' + ')} <span>${pv.score} point${pv.score==1?'':'s'}</span>${RB.pend.size==7?' <em>(with the 50-point bonus)</em>':''}`}</div>`:'';
+ const pvl=pv?`<div class="pv${pv.err?' bad':''}">${pv.err?esc(pv.err)+(pv.bad?pv.bad.map(w=>`<div>${pv.bad.length>1?esc(w)+': ':''}${fixW(w)}</div>`).join(''):''):`${pv.words.map(esc).join(' + ')} <span>${pv.score} point${pv.score==1?'':'s'}</span>${RB.pend.size==7?' <em>(with the 50-point bonus)</em>':''}`}</div>`:'';
  let ctl;
  if(S.over||G.status=='finished')ctl=finBtn(finData(S.tot));
  else if(!mine)ctl=`<p><em>Waiting on ${nm(S.turn)}…</em></p>`;
@@ -295,14 +310,17 @@ const ACT={
   const e=await subscribe();alert(e||'Turn alerts are on.');if(!e)lobby()},
  start(){localStorage.setItem(K('rr_t_'),Date.now());VIEW[G.kind]()},
  otap(v){const i=+v,l=OG.path.at(-1);if(OG.path.length&&i===l)OG.path.pop();else if(OG.path.includes(i))return;else if(!OG.path.length||adj(l,i))OG.path.push(i);else return;ogPaint()},
- oadd(){const w=ocur();if(w.length<3)return alert('Words need at least 3 letters.');const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle()},
+ oadd(){const w=ocur();if(w.length<3)return alert('Words need at least 3 letters.');if(!okW(w)){const e=$('#oerr');if(!DICT)return e?void(e.textContent=WAIT):alert(WAIT);if(e){e.innerHTML='“'+esc(w)+'” isn’t in the word list. '+fixW(w);return}return alert('“'+w+'” isn’t in the word list.')}const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle()},
  oclr(){OG.path=[];VIEW.ogle()},
  orm(v){localStorage.setItem(K('rr_ow_'),JSON.stringify(ow().filter(w=>w!=v)));VIEW.ogle()},
- async words(v,t,auto){if(sub(CUR,me))return;const w=ow(),c=ocur();if(c.length>=3&&!w.includes(c))w.push(c);
+ async words(v,t,auto){if(sub(CUR,me))return;const w=ow(),c=ocur();if(c.length>=3&&!w.includes(c)&&okW(c))w.push(c);
   await put({words:w,r:CUR});OG.path=[];refresh()},
  async answers(v,t,auto){if(!document.querySelector('.ans')||sub(CUR,me))return;const L=rnds().cur.seed.letter,inp=[...document.querySelectorAll('.ans')],a=inp.map(i=>i.value.trim()).map(x=>x&&x[0].toUpperCase()==L?x:'');
   if(inp.some((i,k)=>i.value.trim()&&!a[k])&&!auto&&!confirm('Some answers don’t start with '+L+' and will be dropped. Send anyway?'))return;
   await put({answers:a,r:CUR});refresh()},
+ async realw(v){const w=String(v).toUpperCase();EXT.add(w);localStorage.setItem('wg_extra',JSON.stringify([...EXT]));
+  if(sb&&me)sb.from('wg_words').insert({word:w,game_id:G&&!G.solo?G.id:null}).then(()=>{},()=>{});
+  if(G&&G.kind=='ogle'){const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();const t=$('#ot');if(t){t.value='';t.focus()}}else if(G&&G.kind=='rabble')VIEW.rabble()},
  async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
  async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
  async rnew(){const n=rnds().R.length+1;await put({rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}});refresh()},
@@ -340,6 +358,7 @@ document.addEventListener('keydown',e=>{
  if(e.target.id!='ot')return;e.preventDefault();const w=e.target.value.toUpperCase().replace(/[^A-Z]/g,'');
  if(w.length<3)return void($('#oerr').textContent='Words need at least 3 letters.');
  if(!trace(w,rnds().cur.seed.board))return void($('#oerr').textContent='“'+w+'” isn’t on the board.');
+ if(!okW(w)){const o=$('#oerr');if(!DICT)return void(o.textContent=WAIT);return void(o.innerHTML='“'+esc(w)+'” isn’t in the word list. '+fixW(w))}
  const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();$('#ot').focus()});
 let sending=false;
 function tick(){if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+localStorage.getItem(K('rr_t_'))||0,el=$('#cdown');if(!t0||!el||sub(CUR,me))return;

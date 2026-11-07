@@ -85,3 +85,4 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 #sheet .sh h2{font-size:22px}
 .sh-steps{margin:10px 0 4px;padding-left:24px}.sh-steps li{margin:6px 0}.sh-steps svg{color:var(--go)}
 @media (prefers-reduced-motion:reduce){#sheet .sh,#sheet .sh-bg{transition:none}}
+.pv .lnk,#oerr .lnk{font-size:16px;min-height:36px;padding:0 6px;font-weight:600}
