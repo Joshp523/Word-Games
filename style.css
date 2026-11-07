@@ -1,3 +1,6 @@
+/* The app is already dark. Saying so stops Android browsers (Chrome, Samsung Internet) from applying
+   their own forced dark mode, which turned the dark tile letters pale on the beige tiles. */
+:root{color-scheme:dark light}
 html,body{margin:0;-webkit-text-size-adjust:100%}html{background:var(--bg)}body{background:transparent}
 /* leather background: one photo per game, pinned to the screen while the page scrolls */
 body::before{content:"";position:fixed;inset:0;z-index:-1;background:var(--img) center/cover no-repeat var(--bg);pointer-events:none}
@@ -86,3 +89,12 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 .sh-steps{margin:10px 0 4px;padding-left:24px}.sh-steps li{margin:6px 0}.sh-steps svg{color:var(--go)}
 @media (prefers-reduced-motion:reduce){#sheet .sh,#sheet .sh-bg{transition:none}}
 .pv .lnk,#oerr .lnk{font-size:16px;min-height:36px;padding:0 6px;font-weight:600}
+
+/* Our own dark styles: browsers that look for them use these instead of recolouring the page. */
+@media (prefers-color-scheme:dark){
+ .g b,.rack b{background:#f3e6c8!important;color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
+ .g b small,.rack b small{color:#1d0a0f!important;-webkit-text-fill-color:#1d0a0f}
+ .g15 b.p{background:#ffe7a8!important}
+}
+/* tile letters: always a deep ink, whatever theme the game uses */
+.g b,.rack b{color:#1d0a0f;-webkit-text-fill-color:#1d0a0f}
