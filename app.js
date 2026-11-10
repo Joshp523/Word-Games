@@ -16,7 +16,7 @@ const CAT_SECS=60,OGLE_SECS=180,LIM=5,saved=()=>localStorage.getItem('rr_name')|
 let me=null,G=null,PL=[],moves=[],disp=[],reveals=[],names={},key=null,timer=null,lastSig='',CUR=1,started=false;
 const svg=(k,h,c='o')=>{const o=ORN[k];return `<svg class="${c}" viewBox="0 0 ${o.w} ${o.h}" height="${h}" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${o.d}"/></svg>`};
 const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
-const shell=b=>{const y=scrollY;document.documentElement.dataset.t=document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],b);scrollTo(0,y);tick()};
+const shell=b=>{const y=scrollY;document.documentElement.dataset.t=document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],wbox()+b);scrollTo(0,y);tick()};
 const nm=id=>esc(names[id]||'…'),opp=()=>(PL.find(x=>x.player!=me)||{}).player;
 const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="row"><div class="pn"><p>${esc(m)}</p><p><em>Check config.js, run wg_schema.sql, and enable anonymous sign-ins in Supabase.</em></p></div></div>`);
 async function pushOn(){try{if(!('serviceWorker' in navigator&&'PushManager' in window))return false;const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();
@@ -109,14 +109,14 @@ async function lobby(){
 /* ---------- game loading ---------- */
 async function load(){
  loadExt();
- if(G.solo){const g=getSolo(G.kind);if(g&&g.id==G.id)G=g;moves=G.moves;disp=[];reveals=[];PL=[{player:me,name:saved(),seat:1}];names={[me]:saved()};return}
- const id=G.id,[m,d,r,g,p]=await Promise.all([sb.from('wg_moves').select('*').eq('game_id',id).order('id'),sb.from('wg_disputes').select('*').eq('game_id',id).order('id'),sb.from('wg_cm_reveals').select('*').eq('game_id',id),sb.from('wg_games').select('*').eq('id',id).single(),sb.from('wg_game_players').select('*').eq('game_id',id).order('seat')]);
- moves=m.data||[];disp=d.data||[];reveals=r.data||[];if(g.data)G=g.data;PL=p.data||[];names=Object.fromEntries(PL.map(x=>[x.player,x.name]));
+ if(G.solo){const g=getSolo(G.kind);if(g&&g.id==G.id)G=g;moves=G.moves;disp=[];reveals=[];WQ=[];PL=[{player:me,name:saved(),seat:1}];names={[me]:saved()};return}
+ const id=G.id,[m,d,r,g,p,wq]=await Promise.all([sb.from('wg_moves').select('*').eq('game_id',id).order('id'),sb.from('wg_disputes').select('*').eq('game_id',id).order('id'),sb.from('wg_cm_reveals').select('*').eq('game_id',id),sb.from('wg_games').select('*').eq('id',id).single(),sb.from('wg_game_players').select('*').eq('game_id',id).order('seat'),G.kind=='rabble'?sb.from('wg_words').select('word,status,added_by,decided_by').eq('game_id',id):Promise.resolve({data:[]})]);
+ moves=m.data||[];disp=d.data||[];reveals=r.data||[];if(g.data)G=g.data;PL=p.data||[];names=Object.fromEntries(PL.map(x=>[x.player,x.name]));WQ=wq.data||[];WQ.forEach(q=>{if(q.status=='ok')EXT.add(q.word)});
  if(G.kind=='codemaster'&&G.p1==me&&!key){const {data:k}=await sb.from('wg_cm_keys').select('key').eq('game_id',id).maybeSingle();key=k&&k.key}
 }
 async function draw(){
  if(!G)return;await load();
- const sig=[moves.length,disp.map(d=>d.verdict).join(),reveals.length,G.status,PL.length,!!key].join('|');
+ const sig=[moves.length,disp.map(d=>d.verdict).join(),WQ.map(q=>q.word+q.status).join(),reveals.length,G.status,PL.length,!!key].join('|');
  if(sig===lastSig)return;lastSig=sig;VIEW[G.kind]();
 }
 const refresh=async()=>{lastSig='';await draw()};
@@ -124,15 +124,28 @@ const wait=()=>shell(`<div class="row"><div class="pn"><h2>Invite Players</h2><p
 const fk=i=>disp.some(d=>d.item==i&&d.verdict=='fake');
 /* WORD LIST: ENABLE (public domain, ~173,000 words) plus the official two-letter words added since (QI, ZA, KI, OK, EW…).
    Rabble plays and Ogle words must be in it. If a word is refused, the player can look it up on Merriam-Webster's free Scrabble
-   dictionary and tap "It's a Real Word": that adds it to a shared list of extra words (Supabase table wg_words) for everyone.
+   dictionary. In Rabble they can also tap "Ask to Allow It": the other player(s) then see the word and choose "Allow It" or
+   "Not a Word". Once allowed it joins the shared list of extra words (Supabase table wg_words) for everyone. In solo Rabble there's
+   nobody to ask, so an allowed word counts in your own solo games on this device only. Ogle is timed, so no exceptions there.
    Categories keeps its Dispute button. */
-let DICT=null,EXT=new Set(JSON.parse(localStorage.getItem('wg_extra')||'[]')),extAt=0;
+let DICT=null,EXT=new Set(JSON.parse(localStorage.getItem('wg_ok_words')||'[]')),SOLOW=new Set(JSON.parse(localStorage.getItem('wg_solo_words')||'[]')),WQ=[],extAt=0;
+try{localStorage.removeItem('wg_extra')}catch(e){}
 const LOOK=w=>'https://scrabble.merriam.com/finder/'+encodeURIComponent(w.toLowerCase());
-async function loadExt(){if(Date.now()-extAt<30000||!sb||!me)return;extAt=Date.now();try{const {data}=await sb.from('wg_words').select('word');(data||[]).forEach(x=>EXT.add(x.word.toUpperCase()))}catch(e){}}
-const fixW=w=>`<a class="lnk" target="_blank" rel="noopener" href="${LOOK(w)}">Look It Up</a> <button class="lnk" data-a="realw" data-v="${esc(w)}">It’s a Real Word</button>`;
+async function loadExt(){if(Date.now()-extAt<30000||!sb||!me)return;extAt=Date.now();try{const {data,error}=await sb.from('wg_words').select('word').eq('status','ok');if(error)return;EXT=new Set((data||[]).map(x=>x.word.toUpperCase()));localStorage.setItem('wg_ok_words',JSON.stringify([...EXT]))}catch(e){}}
+const others=()=>{const o=PL.filter(x=>x.player!=me).map(x=>esc(x.name));return o.length?o.join(' or '):'your opponent'};
+const fixW=w=>{const W=w.toUpperCase(),look=`<a class="lnk" target="_blank" rel="noopener" href="${LOOK(w)}">Look It Up</a>`;
+ if(G&&G.kind=='ogle')return look;   // Ogle is timed, so there's no waiting for an opponent: the word list decides
+ if(!G||G.solo)return look+` <button class="lnk" data-a="realw" data-v="${esc(W)}">Allow It in My Solo Games</button>`;
+ const q=WQ.find(x=>x.word==W);
+ if(q&&q.status=='pending')return look+(q.added_by==me?` <em>Waiting for ${others()} to allow it.</em>`:` <em>${nm(q.added_by)} has asked about this word. See above.</em>`);
+ if(q&&q.status=='no')return look+` <em>${nm(q.decided_by)} said it’s not a word.</em> <button class="lnk" data-a="realw" data-v="${esc(W)}">Ask Again</button>`;
+ return look+` <button class="lnk" data-a="realw" data-v="${esc(W)}">Ask ${others()} to Allow It</button>`};
+const wbox=()=>!G||G.solo||G.kind!='rabble'?'':WQ.filter(q=>q.status=='pending').map(q=>q.added_by==me
+ ?`<div class="row"><div class="pn"><h2>Waiting on “${esc(q.word)}”</h2><p>You’ve asked ${others()} to allow it. Once they do, you can play it.</p></div></div>`
+ :`<div class="row"><div class="pn"><h2>Is “${esc(q.word)}” a Word?</h2><p>${nm(q.added_by)} wants to play it. Look it up, then decide. If you allow it, it counts for everyone from now on.</p><a class="btn ghost" target="_blank" rel="noopener" href="${LOOK(q.word)}">Look It Up</a><button class="btn" data-a="wok" data-v="${esc(q.word)}">Allow It</button><button class="btn ghost" data-a="wno" data-v="${esc(q.word)}">Not a Word</button></div></div>`).join('');
 const loadDict=()=>fetch('words.txt').then(r=>r.ok?r.text():Promise.reject()).then(t=>{DICT=new Set(t.split('\n').map(x=>x.trim().toUpperCase()).filter(Boolean));if(G&&G.kind=='rabble')VIEW.rabble()}).catch(()=>setTimeout(loadDict,5000));
 loadDict();
-const okW=w=>!!DICT&&(DICT.has(w.toUpperCase())||EXT.has(w.toUpperCase())),WAIT='The word list is still loading. Try again in a moment.';
+const okW=w=>{if(!DICT)return false;const W=w.toUpperCase();return DICT.has(W)||EXT.has(W)||!!(G&&G.solo&&SOLOW.has(W))},WAIT='The word list is still loading. Try again in a moment.';
 const dbtn=i=>G&&G.kind!='categories'?'':disp.some(d=>d.item==i)?'<em>disputed</em>':`<button class="lnk" data-a="dispute" data-v="${esc(i)}">Dispute</button>`;
 const dbox=()=>disp.filter(d=>!d.verdict).map(d=>d.raised_by==me?`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p>Look it up, then give your verdict.</p><a class="btn ghost" target="_blank" rel="noopener" href="https://www.google.com/search?q=define+${encodeURIComponent(d.item)}">Look It Up</a><button class="btn" data-a="rule" data-v="real" data-id="${d.id}">It’s a Real Word</button><button class="btn ghost" data-a="rule" data-v="fake" data-id="${d.id}">It’s Not a Word</button></div>`:`<div class="pn"><h2>Disputed: ${esc(d.item)}</h2><p><em>${nm(d.raised_by)} is checking this one…</em></p></div>`).join('');
 const lobbyBtn='<a class="btn ghost" href="#">Return to Lobby</a>';
@@ -318,9 +331,17 @@ const ACT={
  async answers(v,t,auto){if(!document.querySelector('.ans')||sub(CUR,me))return;const L=rnds().cur.seed.letter,inp=[...document.querySelectorAll('.ans')],a=inp.map(i=>i.value.trim()).map(x=>x&&x[0].toUpperCase()==L?x:'');
   if(inp.some((i,k)=>i.value.trim()&&!a[k])&&!auto&&!confirm('Some answers don’t start with '+L+' and will be dropped. Send anyway?'))return;
   await put({answers:a,r:CUR});refresh()},
- async realw(v){const w=String(v).toUpperCase();EXT.add(w);localStorage.setItem('wg_extra',JSON.stringify([...EXT]));
-  if(sb&&me)sb.from('wg_words').insert({word:w,game_id:G&&!G.solo?G.id:null}).then(()=>{},()=>{});
+ async realw(v){const w=String(v).toUpperCase();
+  if(G&&!G.solo){const {data,error}=await sb.rpc('wg_ask_word',{p_word:w,p_game:G.id});
+   if(error)return alert('Couldn’t send that. '+error.message);
+   await refresh();
+   if(!WQ.some(q=>q.word==w&&q.status=='pending')&&data=='pending')return alert('“'+w+'” is already waiting for an answer in another game.');
+   if(data=='ok')return alert('“'+w+'” has already been allowed. Try playing it again.');
+   return alert('Sent. '+others().replace(/&amp;/g,'&')+' will be asked to allow “'+w+'”. Once they do, you can play it.')}
+  SOLOW.add(w);localStorage.setItem('wg_solo_words',JSON.stringify([...SOLOW]));
   if(G&&G.kind=='ogle'){const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();const t=$('#ot');if(t){t.value='';t.focus()}}else if(G&&G.kind=='rabble')VIEW.rabble()},
+ async wok(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:true});if(error)alert('Couldn’t save that. '+error.message);EXT.add(String(v).toUpperCase());refresh()},
+ async wno(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:false});if(error)alert('Couldn’t save that. '+error.message);refresh()},
  async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
  async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
  async rnew(){const n=rnds().R.length+1;await put({rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}});refresh()},
