@@ -91,19 +91,34 @@ function best(x){const s=x.score||'';if(x.kind=='codemaster'){const m=/(\d+) tur
 function hall(rows){return['ogle','rabble','categories','codemaster'].map(k=>{let top=null;for(const x of rows){if(x.kind!=k)continue;const v=best(x);if(v==null)continue;if(!top||v>top.v)top={x,v}}
  const what=top?(k=='codemaster'?`${top.v} turn${top.v==1?'':'s'} to spare`:`${top.v} point${top.v==1?'':'s'}`):'';
  return `<div class="hl"><div class="gm"><span><strong>${KINDS[k][0]}</strong></span>${top?`<em>${new Date(top.x.won_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</em>`:''}</div><p>${top?`${esc(top.x.victors)} — ${what}`:'No high score yet.'}</p></div>`}).join('')}
-async function lobby(){
- G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby';const on=await pushOn();
+/* The lobby checks for news every 8 seconds while it's on screen, and right away when you come back to the app.
+   A quiet check only redraws when something changed, and never while you're typing a code or a sheet is open.
+   Games where it's your turn go to the top, and the count shows on the app icon (where the phone allows it). */
+let LOBSIG='',MYTURN=new Set();
+function turnBadge(n){document.title=(n?`(${n}) `:'')+TITLE0;try{if(navigator.setAppBadge)n?navigator.setAppBadge(n):navigator.clearAppBadge()}catch(e){}}
+const TITLE0=document.title.replace(/^\(\d+\) /,'');
+async function lobby(quiet){
+ if(quiet&&(G||location.hash.length>1))return;
+ if(!quiet){G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby'}const on=quiet?true:await pushOn();
  const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id')]);
  const solo=['ogle','categories'].map(getSolo).filter(x=>x&&x.status!='finished');
  const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={},GP={};
  if(vis.length){const ids=vis.map(x=>x.id),[m,p]=await Promise.all([sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',ids).order('id'),sb.from('wg_game_players').select('*').in('game_id',ids).order('seat')]);
   (m.data||[]).forEach(x=>(MV[x.game_id]=MV[x.game_id]||[]).push(x));(p.data||[]).forEach(x=>(GP[x.game_id]=GP[x.game_id]||[]).push(x))}
+ const TT={};for(const x of vis){try{TT[x.id]=turnOf(x,MV[x.id]||[],GP[x.id]||[])}catch(e){TT[x.id]=''}}
+ vis.sort((a,b)=>(TT[b.id]=='your turn')-(TT[a.id]=='your turn'));
+ const now=new Set(vis.filter(x=>TT[x.id]=='your turn').map(x=>x.code)),fresh=[...now].filter(c=>!MYTURN.has(c));
+ const sig=vis.map(x=>x.id+':'+TT[x.id]).join()+'|'+solo.length+'|'+(w.data||[]).length;
+ if(quiet){if(G||location.hash.length>1||sig===LOBSIG)return;const ae=document.activeElement;
+  if(document.getElementById('sheet')||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))||($('#jc')&&$('#jc').value))return}
+ LOBSIG=sig;MYTURN=now;turnBadge(now.size);
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">
- <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'<p style="margin-top:12px"><button class="lnk" data-a="testalert">Send Me a Test Alert</button></p>':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
  <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
  <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div></div>`);
- setTimeout(()=>nudge(on),900);
+ if(quiet&&fresh.length){fresh.forEach(c=>{const a=document.querySelector(`a[href="#${c}"]`),r=a&&(a.closest('.gm')||a);if(r)r.classList.add('fresh')});try{navigator.vibrate&&navigator.vibrate([120,60,120])}catch(e){}}
+ if(!quiet){clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)lobby(true)},8000);setTimeout(()=>nudge(on),900)}
 }
 
 /* ---------- game loading ---------- */
@@ -318,6 +333,16 @@ const ACT={
  later(v){snooze(v,v=='install'?5:7);closeSheet()},
  async install(){if(!BIP)return;BIP.prompt();const r=await BIP.userChoice;BIP=null;closeSheet();if(r.outcome!='accepted')snooze('install',5)},
  async alertson(){const b=document.querySelector('[data-a=alertson]');if(b){b.disabled=true;b.textContent='One moment…'}const e=await subscribe();if(e){sheet(`<h2>Alerts Are Off</h2><p>${esc(e)}</p><button class="btn" data-a="sheetx">OK</button>`);snooze('alerts',7)}else{sheet('<h2>You’re All Set</h2><p>We’ll tell you when it’s your turn.</p><button class="btn" data-a="sheetx">Lovely</button>');lobby()}},
+ async testalert(){const b=document.querySelector('[data-a=testalert]');if(b){b.disabled=true;b.textContent='Sending…'}
+  let ep='';try{const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();ep=sub?sub.endpoint:''}catch(e){}
+  if(!ep){if(b)b.textContent='Send Me a Test Alert',b.disabled=false;return sheet('<h2>Alerts Are Off on This Phone</h2><p>Tap Turn Alerts in the lobby to switch them on.</p><button class="btn" data-a="sheetx">OK</button>')}
+  try{const reg=await navigator.serviceWorker.getRegistration(),j=(await reg.pushManager.getSubscription()).toJSON();await sb.from('wg_push_subs').upsert({endpoint:j.endpoint,player:me,sub:j},{onConflict:'endpoint'})}catch(e){}
+  const {data,error}=await sb.functions.invoke('wg-notify',{body:{test:true,endpoint:ep}});if(b){b.textContent='Send Me a Test Alert';b.disabled=false}
+  const msg=error||!data?'The alert service didn’t answer. The wg-notify function in Supabase may need to be updated or deployed again.'
+   :data.ok?'A test alert is on its way. If nothing shows up within a minute, check Settings → Notifications → Word Games and make sure alerts are allowed.'
+   :data.why=='not-registered'?'This phone isn’t on the alert list yet. Close Word Games, open it again from your home screen, and try once more.'
+   :`Your phone’s alert service refused the message (code ${data.code||'?'}). Tap Turn Alerts again, or remove Word Games from your home screen and add it back.`;
+  sheet(`<h2>${data&&data.ok?'Test Alert Sent':'Alert Check'}</h2><p>${esc(msg)}</p><button class="btn" data-a="sheetx">OK</button>`)},
  async push(){if(!('serviceWorker' in navigator&&'PushManager' in window))return alert('On iPhone: tap Share → Add to Home Screen, then open the game from your home screen and try again.');
   if(!VAPID_PUBLIC_KEY||VAPID_PUBLIC_KEY.startsWith('YOUR'))return alert('Add your VAPID public key to config.js first.');
   const e=await subscribe();alert(e||'Turn alerts are on.');if(!e)lobby()},
@@ -332,7 +357,7 @@ const ACT={
   if(inp.some((i,k)=>i.value.trim()&&!a[k])&&!auto&&!confirm('Some answers don’t start with '+L+' and will be dropped. Send anyway?'))return;
   await put({answers:a,r:CUR});refresh()},
  async realw(v){const w=String(v).toUpperCase();
-  if(G&&!G.solo){const {data,error}=await sb.rpc('wg_ask_word',{p_word:w,p_game:G.id});
+  if(G&&!G.solo){const {data,error}=await sb.rpc('wg_ask_word',{p_word:w,p_game:G.id,p_player:me});
    if(error)return alert('Couldn’t send that. '+error.message);
    await refresh();
    if(!WQ.some(q=>q.word==w&&q.status=='pending')&&data=='pending')return alert('“'+w+'” is already waiting for an answer in another game.');
@@ -340,8 +365,8 @@ const ACT={
    return alert('Sent. '+others().replace(/&amp;/g,'&')+' will be asked to allow “'+w+'”. Once they do, you can play it.')}
   SOLOW.add(w);localStorage.setItem('wg_solo_words',JSON.stringify([...SOLOW]));
   if(G&&G.kind=='ogle'){const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();const t=$('#ot');if(t){t.value='';t.focus()}}else if(G&&G.kind=='rabble')VIEW.rabble()},
- async wok(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:true});if(error)alert('Couldn’t save that. '+error.message);EXT.add(String(v).toUpperCase());refresh()},
- async wno(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:false});if(error)alert('Couldn’t save that. '+error.message);refresh()},
+ async wok(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:true,p_player:me});if(error)alert('Couldn’t save that. '+error.message);EXT.add(String(v).toUpperCase());refresh()},
+ async wno(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:false,p_player:me});if(error)alert('Couldn’t save that. '+error.message);refresh()},
  async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
  async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
  async rnew(){const n=rnds().R.length+1;await put({rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}});refresh()},
@@ -386,6 +411,8 @@ function tick(){if(!G||!['categories','ogle'].includes(G.kind))return;const t0=+
  const left=Math.max(0,(G.kind=='ogle'?OGLE_SECS:CAT_SECS)-Math.floor((Date.now()-t0)/1000));el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');
  if(left==0&&!sending){sending=true;ACT[G.kind=='ogle'?'words':'answers'](null,null,true).finally(()=>sending=false)}}
 setInterval(tick,1000);
+const comeBack=()=>{if(document.hidden||!me)return;if(G&&!G.solo)draw();else if(!G)lobby(true)};
+addEventListener('visibilitychange',comeBack);addEventListener('pageshow',comeBack);addEventListener('focus',comeBack);
 init();
 
 // ---- Tiles drawn as pictures ----
@@ -396,8 +423,8 @@ const TILE={};
 function tileImg(txt,sc,bg,w,h,fs,ss){const dpr=Math.min(3,window.devicePixelRatio||1),k=[txt,sc,bg,w,h,fs,ss,dpr].join('|');if(TILE[k])return TILE[k];
  const c=document.createElement('canvas');c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);const x=c.getContext('2d');x.scale(dpr,dpr);
  const r=3;x.fillStyle=bg;x.beginPath();x.moveTo(r,0);x.arcTo(w,0,w,h,r);x.arcTo(w,h,0,h,r);x.arcTo(0,h,0,0,r);x.arcTo(0,0,w,0,r);x.closePath();x.fill();
- x.fillStyle='#1d0a0f';x.textAlign='center';x.textBaseline='middle';x.font=`700 ${fs}px 'Cinzel Decorative',serif`;x.fillText(txt,w/2,h/2+fs*.05);
- if(sc!==''){x.font=`600 ${ss}px 'Cormorant Garamond',serif`;x.textAlign='right';x.textBaseline='alphabetic';x.fillText(sc,w-2,h-1.5)}
+ x.fillStyle='#1d0a0f';x.textAlign='center';x.textBaseline='middle';x.font=`700 ${fs}px 'Atkinson Hyperlegible',Arial,sans-serif`;x.fillText(txt,w/2,h/2+fs*.05);
+ if(sc!==''){x.font=`700 ${ss}px 'Atkinson Hyperlegible',Arial,sans-serif`;x.textAlign='right';x.textBaseline='alphabetic';x.fillText(sc,w-2,h-1.5)}
  return TILE[k]=c.toDataURL('image/png')}
 function paintTiles(){const root=document.getElementById('app');if(!root)return;
  for(const b of root.querySelectorAll('.g b,.rack b')){const w=b.clientWidth,h=b.clientHeight;if(!w||!h)continue;
@@ -408,5 +435,5 @@ function paintTiles(){const root=document.getElementById('app');if(!root)return;
 let tileRaf=0;const tilesSoon=()=>{if(!tileRaf)tileRaf=requestAnimationFrame(()=>{tileRaf=0;paintTiles()})};
 new MutationObserver(tilesSoon).observe(document.getElementById('app'),{childList:true,subtree:true,characterData:true});
 addEventListener('resize',tilesSoon);
-if(document.fonts)document.fonts.ready.then(()=>{for(const k in TILE)delete TILE[k];document.querySelectorAll('[data-tk]').forEach(b=>delete b.dataset.tk);paintTiles()});
+if(document.fonts)Promise.all([document.fonts.ready,document.fonts.load("700 20px 'Atkinson Hyperlegible'").catch(()=>0)]).then(()=>{for(const k in TILE)delete TILE[k];document.querySelectorAll('[data-tk]').forEach(b=>delete b.dataset.tk);paintTiles()});
 tilesSoon();
