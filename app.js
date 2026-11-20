@@ -52,6 +52,7 @@ async function nudge(on){
 const soloK=k=>'wg_solo_'+k,getSolo=k=>{try{return JSON.parse(localStorage.getItem(soloK(k)))}catch(e){return null}},putSolo=g=>localStorage.setItem(soloK(g.kind),JSON.stringify(g));
 const newSolo=k=>{const g={id:'solo_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:k,seed:SEED[k](),status:'active',max_players:1,code:'SOLO-'+k.toUpperCase(),solo:true,moves:[]};putSolo(g);return g};
 const bestK=k=>'wg_best_'+k;
+let joinedNow=false;
 async function put(payload){if(G.solo){const g=getSolo(G.kind);if(!g||g.id!=G.id)return;g.moves.push({id:g.moves.length+1,game_id:g.id,player:me,payload});putSolo(g);G=g;return{}}return sb.from('wg_moves').insert({game_id:G.id,player:me,payload})}
 
 /* ---------- login ---------- */
@@ -68,8 +69,8 @@ async function route(){
  if(c.startsWith('SOLO-')){const g=getSolo(c.slice(5).toLowerCase());if(!g){location.hash='';return}G=g;key=null;lastSig='';return draw()}
  if(c.length!=4)return lobby();
  let {data:g}=await sb.from('wg_games').select('*').eq('code',c).maybeSingle();
- if(!g){const r=await sb.rpc('wg_join_game',{p_code:c,p_name:saved()});if(r.error){alert(r.error.message);location.hash='';return}g=r.data}
- G=g;key=null;lastSig='';RB.pend=new Map();RB.sel=null;RB.ex=null;RB.sig=-1;await draw();timer=setInterval(draw,4000);
+ if(!g){const r=await sb.rpc('wg_join_game',{p_code:c,p_name:saved()});if(r.error){alert(r.error.message);location.hash='';return}g=r.data;joinedNow=true}
+ G=g;key=null;lastSig='';RB.pend=new Map();RB.sel=null;RB.ex=null;RB.sig=-1;await draw();timer=setInterval(draw,4000);if(joinedNow){joinedNow=false;pingAlerts({joined:me})}
 }
 
 /* ---------- lobby ---------- */
@@ -134,7 +135,10 @@ async function draw(){
  const sig=[moves.length,disp.map(d=>d.verdict).join(),WQ.map(q=>q.word+q.status).join(),reveals.length,G.status,PL.length,!!key].join('|');
  if(sig===lastSig)return;lastSig=sig;VIEW[G.kind]();
 }
-const refresh=async()=>{lastSig='';await draw()};
+// After anything a player does in a shared game, ask the alert service to tell the others.
+// (It works out who's up and never sends the same alert twice.)
+const pingAlerts=(extra={})=>{if(!G||G.solo||!sb)return;try{sb.functions.invoke('wg-notify',{body:{ping:G.id,...extra}}).catch(()=>{})}catch(e){}};
+const refresh=async()=>{lastSig='';pingAlerts();await draw()};
 const wait=()=>shell(`<div class="row"><div class="pn"><h2>Invite Players</h2><p>${PL.length} of ${G.max_players} have joined.</p><div class="code">${G.code}</div><p>Send them this link, or the code:</p><input readonly value="${location.origin+location.pathname}#${G.code}"><button class="btn" data-a="copy">Copy Invite Link</button><a class="btn ghost" href="#">Return to Lobby</a></div></div>`);
 const fk=i=>disp.some(d=>d.item==i&&d.verdict=='fake');
 /* WORD LIST: ENABLE (public domain, ~173,000 words) plus the official two-letter words added since (QI, ZA, KI, OK, EW…).

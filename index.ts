@@ -2,6 +2,11 @@
 // Works for 2, 3 and 4 player games (it reads the seats from wg_game_players).
 // Also: Rabble word requests (the other players are asked, the asker hears the answer),
 // and a "test" call from the lobby so a player can check alerts reach their own phone.
+//
+// Two ways in, same alerts, never sent twice (wg_notified remembers what was announced):
+//  1. "ping": the app calls this right after a player does something in a game. This is the main route,
+//     because it uses the same path as the test alert, which is known to work.
+//  2. the old database triggers (pg_net + webhook secret), if they happen to be working too.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -29,16 +34,54 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Ping from the app: look at what happened in this game in the last 15 minutes and announce anything new.
+  if (body.ping) {
+    const gid = String(body.ping), since = new Date(Date.now() - 15 * 60e3).toISOString();
+    const [mv, ds, ws] = await Promise.all([
+      db.from("wg_moves").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
+      db.from("wg_disputes").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
+      db.from("wg_words").select("*").eq("game_id", gid).or(`created_at.gte.${since},decided_at.gte.${since}`),
+    ]);
+    const jobs: [string, string, Record<string, unknown>][] = [];
+    for (const r of mv.data ?? []) jobs.push([`m:${r.id}`, "wg_moves", r]);
+    for (const r of ds.data ?? []) jobs.push([`d:${r.id}`, "wg_disputes", r]);
+    for (const r of ws.data ?? []) jobs.push([`w:${r.word}:${r.status}:${r.decided_at ?? r.created_at}`, "wg_words", r]);
+    if (body.joined) {
+      const { data: seat } = await db.from("wg_game_players").select("*").eq("game_id", gid).eq("player", body.joined).maybeSingle();
+      if (seat) jobs.push([`j:${gid}:${body.joined}`, "wg_game_players", seat]);
+    }
+    let sent = 0;
+    for (const [key, table, r] of jobs) if (await claim(key)) sent += await handle(table, r);
+    return json({ ok: true, sent });
+  }
+
   if (req.headers.get("x-webhook-secret") !== Deno.env.get("WEBHOOK_SECRET")) return new Response("no", { status: 401 });
   const { table, record: r } = body;
   // Joins are announced from wg_game_players (one row per seat), so the old wg_games ping is ignored.
   if (table === "wg_games") return new Response("ok");
+  const key = table === "wg_moves" ? `m:${r.id}` : table === "wg_disputes" ? `d:${r.id}` : table === "wg_game_players" ? `j:${r.game_id}:${r.player}`
+    : `w:${r.word}:${r.status}:${r.decided_at ?? r.created_at}`;
+  if (await claim(key)) await handle(table, r);
+  return new Response("ok");
+});
+
+// Mark an event as announced. Returns false if it already was.
+async function claim(key: string) {
+  const { error } = await db.from("wg_notified").insert({ key });
+  if (!error) return true;
+  // Table not created yet (wg_patch_pings.sql not run): send anyway rather than never.
+  return error.code === "42P01" || /does not exist|schema cache/i.test(error.message ?? "");
+}
+
+// Work out who to tell about one event, and send it. Returns how many alerts went out.
+// deno-lint-ignore no-explicit-any
+async function handle(table: string, r: any): Promise<number> {
   const gid = r.game_id;
   const [{ data: g }, { data: seats }] = await Promise.all([
     db.from("wg_games").select("*").eq("id", gid).single(),
     db.from("wg_game_players").select("player,name,seat").eq("game_id", gid).order("seat"),
   ]);
-  if (!g) return new Response("ok");
+  if (!g) return 0;
   const P: Seat[] = seats ?? [];
   const name = (id: string) => P.find((x) => x.player === id)?.name ?? "Someone";
   const others = (id: string) => P.filter((x) => x.player !== id).map((x) => x.player);
@@ -89,12 +132,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  let n = 0;
   for (const [to, text] of out) {
     const { data: subs } = await db.from("wg_push_subs").select("*").eq("player", to);
     for (const s of subs ?? []) {
-      try { await send(s.sub, TITLE[g.kind], text, `./#${g.code}`, `wg-${g.code}`); }
+      try { await send(s.sub, TITLE[g.kind], text, `./#${g.code}`, `wg-${g.code}`); n++; }
       catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await db.from("wg_push_subs").delete().eq("endpoint", s.endpoint); }
     }
   }
-  return new Response("ok");
-});
+  return n;
+}

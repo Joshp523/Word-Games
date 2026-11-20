@@ -1,32 +1,39 @@
 <p align="center"><img src="icon-192.png" width="110" alt=""></p>
 
 <h1 align="center">Word Games</h1>
-<p align="center"><em>Four classic word games you can play across the miles, one turn at a time.</em></p>
+<h3 align="center">Four games. Every time zone. One turn at a time.</h3>
 <p align="center"><a href="https://joshp523.github.io/Word-Games/"><b>▶ Open the app</b></a></p>
 
-<p align="center"><img src="readme-showcase.jpg" alt="Word Games on a phone"></p>
+<table><tr>
+<td align="center"><img src="readme-lobby.jpg" width="200"><br><sub><b>The Lobby</b></sub></td>
+<td align="center"><img src="readme-rabble.jpg" width="200"><br><sub><b>Rabble</b></sub></td>
+<td align="center"><img src="readme-ogle.jpg" width="200"><br><sub><b>Ogle</b></sub></td>
+<td align="center"><img src="readme-categories.jpg" width="200"><br><sub><b>Categories</b></sub></td>
+</tr></table>
 
-Word Games is a game parlor for family who live far apart. Start a game, send the invite link, and take your turn whenever you have a minute. The game waits for everyone.
+## ✦ Your move. Instantly.
+**Turn alerts, rebuilt.** The moment someone plays, the next player's phone buzzes. Every move, every join, every word dispute. Never twice.
 
-## The games
+**A lobby that keeps up.** It refreshes itself. Games waiting on *you* rise to the top and glow, and the count rides on your home-screen icon.
 
-| | |
-|---|---|
-| **Ogle** | a game of hidden words |
-| **Rabble** | a game of tiles and cunning |
-| **Categories** | a game of quick wit |
-| **Codemaster** | win together, or fall together |
+**Test it yourself.** One tap sends a test alert to your phone, and tells you in plain words if something's off.
 
-Each game has its own leather-bound look, the lobby keeps high scores, and **Turn alerts** can ping your phone when it's your move.
+## ✦ Four games, one leather-bound parlor
+- **Rabble.** Tiles and cunning, on a full 15×15 board.
+- **Ogle.** Three minutes, sixteen letters, as many words as you can trace.
+- **Categories.** One letter, twelve categories, sixty seconds.
+- **Codemaster.** Win together, or fall together.
 
-<table><tr><td align="center" valign="top"><img src="readme-screen-1.jpg" width="230" alt="Welcome"><br><sub>Welcome</sub></td><td align="center" valign="top"><img src="readme-screen-2.jpg" width="230" alt="The lobby"><br><sub>The lobby</sub></td></tr></table>
+## ✦ Made for every eye
+**Hyperlegible tiles.** Rabble and Ogle tiles use Atkinson Hyperlegible, the typeface designed by the Braille Institute. Clear on the smallest phone.
 
-## Why it's worth a look
+## ✦ Fair play, built in
+**"Is that a word?"** In Rabble, a word that isn't in the dictionary goes to your opponent. They look it up and decide. Allowed words count for everyone from then on.
 
-- **Cool:** It looks like a leather-bound games compendium, a different color for every game.
-- **Innovative:** It's played *asynchronously*: Grandma in one time zone and the grandkids in another can play the same game over a day or a week.
-- **Impressive:** Four complete games, invite links, push notifications and a hall of fame, built by one person.
-- **Useful:** No passwords to forget. Type your name and your games are there, on any device.
+**173,000-word dictionary.** Checked instantly, right on your phone.
+
+## ✦ Play anywhere
+Two to four players, solo practice, invite links, a Hall of Winners, and no app store required.
 
 ---
 
