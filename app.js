@@ -98,10 +98,33 @@ function hall(rows){return['ogle','rabble','categories','codemaster'].map(k=>{le
 let LOBSIG='',MYTURN=new Set();
 function turnBadge(n){document.title=(n?`(${n}) `:'')+TITLE0;try{if(navigator.setAppBadge)n?navigator.setAppBadge(n):navigator.clearAppBadge()}catch(e){}}
 const TITLE0=document.title.replace(/^\(\d+\) /,'');
+/* ---------- players, pictures and challenges ----------
+   Everyone who has signed in appears in the Challenge panel with their picture. Pick one to three players,
+   then a game: they get an invitation in their lobby (and a phone alert). Josh can hide people from the list. */
+let PLAYERS=[],SELP=new Set();const AV={};
+const isJosh=()=>((AV[me]||{}).name||saved()).trim().toLowerCase()==='josh';
+const face=(id,s=34)=>{const p=AV[id]||{},n=(p.name||names[id]||'?').trim();return `<span class="av" style="--s:${s}px">${p.avatar?`<img src="${p.avatar}" alt="">`:`<i>${esc(n.slice(0,1).toUpperCase())}</i>`}</span>`};
+const faces=ids=>ids.length?`<span class="avs">${ids.slice(0,3).map(id=>face(id,26)).join('')}</span>`:'';
+function invitesHTML(L){if(!L.length)return'';return `<div class="pn inv"><h2>Challenges</h2>${L.map(i=>`<div class="ivr">${face(i.from_player,40)}<span class="ivt"><b>${esc(i.from_name||'Someone')}</b> · ${esc((KINDS[i.kind]||[i.kind])[0]||'')}</span><button class="btn sm" data-a="accept" data-v="${esc(i.code||'')}">Play</button><button class="btn ghost sm" data-a="decline" data-v="${i.id}">No thanks</button></div>`).join('')}</div>`}
+function challengeHTML(){const J=isJosh(),L=PLAYERS.filter(x=>x.id!==me&&(J||!x.hidden));const n=SELP.size;
+ return `<div class="pn ch"><h2>Challenge</h2><div class="plist">
+  <label class="pchip mine" title="Change your picture">${face(me,52)}<span>You</span><input type="file" accept="image/*" id="avf" hidden></label>
+  ${L.map(x=>`<button class="pchip${SELP.has(x.id)?' sel':''}${x.hidden?' gone':''}" data-a="pick" data-v="${x.id}" aria-pressed="${SELP.has(x.id)}">${face(x.id,52)}<span>${esc(x.name)}</span>${J?`<i class="pdel" data-a="hidep" data-v="${x.id}" role="button" aria-label="${x.hidden?'Show':'Hide'} ${esc(x.name)}">${x.hidden?'↺':'✕'}</i>`:''}</button>`).join('')||'<p class="ex"><em>Nobody else has signed in yet.</em></p>'}</div>
+  <div class="chgo">${['rabble','ogle','categories','codemaster'].map(k=>`<button class="btn${n?'':' ghost'}" data-a="challenge" data-v="${k}"${!n||(k=='codemaster'&&n!==1)?' disabled':''}>${KINDS[k][0]}</button>`).join('')}</div></div>`}
+const STY=()=>{try{return localStorage.getItem('wg_style')||'ornate'}catch(e){return'ornate'}};
+const styleToggle=()=>`<div class="sty" role="group" aria-label="Look"><button class="${STY()=='ornate'?'on':''}" data-a="style" data-v="ornate">Ornate</button><button class="${STY()=='min'?'on':''}" data-a="style" data-v="min">Understated</button></div>`;
+function applyStyle(){document.documentElement.classList.toggle('min',STY()=='min')}applyStyle();
+async function setAvatar(file){if(!file)return;const img=new Image(),url=URL.createObjectURL(file);img.src=url;await img.decode().catch(()=>{});
+ const S=192,c=document.createElement('canvas');c.width=c.height=S;const k=Math.max(S/img.width,S/img.height),w=img.width*k,h=img.height*k;c.getContext('2d').drawImage(img,(S-w)/2,(S-h)/2,w,h);URL.revokeObjectURL(url);
+ const d=c.toDataURL('image/jpeg',.82);const {error}=await sb.rpc('wg_set_avatar',{p_me:me,p_img:d});if(error)return alert('Couldn’t save your picture. '+error.message);AV[me]={...(AV[me]||{}),avatar:d};lobby()}
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='avf')setAvatar(e.target.files[0])});
 async function lobby(quiet){
  if(quiet&&(G||location.hash.length>1))return;
  if(!quiet){G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby'}const on=quiet?true:await pushOn();
- const [g,w,h]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id')]);
+ const [g,w,h,pl,iv]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id'),
+  sb.from('wg_players').select('id,name,avatar,hidden,seen_at').order('seen_at',{ascending:false,nullsFirst:false}).limit(200),sb.from('wg_invites').select('*').eq('player',me).order('created_at',{ascending:false})]);
+ if(!quiet)sb.rpc('wg_seen',{p_me:me}).then(()=>{},()=>{});
+ if(!pl.error){PLAYERS=pl.data||[];PLAYERS.forEach(x=>{AV[x.id]=x})}const INV=iv.error?[]:(iv.data||[]);
  const solo=['ogle','categories'].map(getSolo).filter(x=>x&&x.status!='finished');
  const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={},GP={};
  if(vis.length){const ids=vis.map(x=>x.id),[m,p]=await Promise.all([sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',ids).order('id'),sb.from('wg_game_players').select('*').in('game_id',ids).order('seat')]);
@@ -109,15 +132,18 @@ async function lobby(quiet){
  const TT={};for(const x of vis){try{TT[x.id]=turnOf(x,MV[x.id]||[],GP[x.id]||[])}catch(e){TT[x.id]=''}}
  vis.sort((a,b)=>(TT[b.id]=='your turn')-(TT[a.id]=='your turn'));
  const now=new Set(vis.filter(x=>TT[x.id]=='your turn').map(x=>x.code)),fresh=[...now].filter(c=>!MYTURN.has(c));
- const sig=vis.map(x=>x.id+':'+TT[x.id]).join()+'|'+solo.length+'|'+(w.data||[]).length;
+ const sig=vis.map(x=>x.id+':'+TT[x.id]).join()+'|'+solo.length+'|'+(w.data||[]).length+'|'+INV.map(i=>i.id).join()+'|'+PLAYERS.map(x=>x.id+(x.hidden?'h':'')+(x.avatar||'').length).join();
  if(quiet){if(G||location.hash.length>1||sig===LOBSIG)return;const ae=document.activeElement;
-  if(document.getElementById('sheet')||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))||($('#jc')&&$('#jc').value))return}
+  if(document.getElementById('sheet')||SELP.size||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))||($('#jc')&&$('#jc').value))return}
  LOBSIG=sig;MYTURN=now;turnBadge(now.size);
- app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">
- <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'<p style="margin-top:12px"><button class="lnk" data-a="testalert">Send Me a Test Alert</button></p>':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">${invitesHTML(INV)}
+ <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${faces((GP[x.id]||[]).map(p=>p.player).filter(p=>p!=me))}${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'<p style="margin-top:12px"><button class="lnk" data-a="testalert">Send Me a Test Alert</button></p>':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+${challengeHTML()}
+ <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div>
+</div><div class="lg low">
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
- <div class="pn"><h2>Begin a New Game</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
- <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div></div>`);
+ <div class="pn"><h2>Start with an Invite Code</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
+</div>${styleToggle()}`);
  if(quiet&&fresh.length){fresh.forEach(c=>{const a=document.querySelector(`a[href="#${c}"]`),r=a&&(a.closest('.gm')||a);if(r)r.classList.add('fresh')});try{navigator.vibrate&&navigator.vibrate([120,60,120])}catch(e){}}
  if(!quiet){clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)lobby(true)},8000);setTimeout(()=>nudge(on),900)}
 }
@@ -219,7 +245,7 @@ VIEW.ogle=()=>{
  const b=c.cur.seed.board,mine=sub(CUR,me),done=PL.every(x=>sub(CUR,x.player)),t0=+localStorage.getItem(K('rr_t_'))||0,live=!mine&&t0;
  const mb=CUR>1||G.status=='finished'?`<div class="pn">${matchBox(c,false)}</div>`:'';
  let p;
- if(!mine&&!t0)p=`<div class="pn"><h2>Ready?</h2><p>You will have ${OGLE_SECS/60} minutes once you start. Tap letters, or type words and press Enter. When the clock runs out, your words are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
+ if(!mine&&!t0)p=`<div class="pn"><h2>Ready?</h2><p class="ex">You will have ${OGLE_SECS/60} minutes once you start. Tap letters, or type words and press Enter. When the clock runs out, your words are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
  else if(!mine){const w=ow();p=`<div class="pn"><h2>Your Word</h2><label for="ot">Type a word and press Enter, or tap tiles</label><input id="ot" autocomplete="off" autocapitalize="characters" spellcheck="false"><p id="oerr" style="min-height:1.2em;margin:4px 0"></p><div class="curw">${ocur()||'&nbsp;'}</div><button class="btn" data-a="oadd">Add Word</button><button class="btn ghost" data-a="oclr">Clear</button><h2 style="margin-top:20px">Words Found (${w.length})</h2>${w.map(x=>`<div class="gm"><span>${esc(x)}</span><button class="lnk" data-a="orm" data-v="${esc(x)}">Remove</button></div>`).join('')||'<p><em>None yet.</em></p>'}<button class="btn" data-a="words">Submit Words</button>${lobbyBtn}</div>`}
  else if(!done)p=`<div class="pn"><h2>Submitted</h2><p><em>Waiting on ${waitNames(CUR)}…</em></p>${lobbyBtn}</div>`;
  else{const sc=scores(CUR),nb=solBest(sc);
@@ -235,7 +261,7 @@ VIEW.categories=()=>{
  const c=ctx(),{letter,cats}=c.cur.seed,mine=sub(CUR,me),done=PL.every(x=>sub(CUR,x.player)),t0=+localStorage.getItem(K('rr_t_'))||0;
  const mb=CUR>1||G.status=='finished'?`<div class="pn">${matchBox(c,false)}</div>`:'';
  let p;
- if(!mine&&!t0)p=`<div class="pn" style="max-width:560px"><h2>Ready?</h2><p>You will have ${CAT_SECS} seconds once you start. When the clock runs out, your answers are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
+ if(!mine&&!t0)p=`<div class="pn" style="max-width:560px"><h2>Ready?</h2><p class="ex">You will have ${CAT_SECS} seconds once you start. When the clock runs out, your answers are sent automatically.</p><button class="btn" data-a="start">Start the Clock</button>${lobbyBtn}</div>`;
  else if(!mine){const dr=JSON.parse(localStorage.getItem(K('rr_d_'))||'[]');p=`<div class="pn" style="max-width:560px"><h2>Your Answers</h2>${cats.map((c,i)=>`<label for="a${i}">${i+1}. ${esc(c)}</label><input id="a${i}" class="ans" autocomplete="off" value="${esc(dr[i]||'')}">`).join('')}<button class="btn" data-a="answers">Seal &amp; Send</button>${lobbyBtn}</div>`}
  else if(!done)p=`<div class="pn"><h2>Sealed</h2><p><em>Waiting on ${waitNames(CUR)}…</em></p>${lobbyBtn}</div>`;
  else{const sc=scores(CUR),nb=solBest(sc);
@@ -328,6 +354,16 @@ const ACT={
  logout(){localStorage.removeItem('rr_name');showLogin()},
  async new(k,t){const np=k=='codemaster'?2:t&&t.dataset.solo?1:+$('#np').value;
   if(np==1){if(!['ogle','categories'].includes(k))return alert(KINDS[k][0]+' needs at least 2 players. Solo practice is for Ogle and Categories.');const g=newSolo(k);if(location.hash=='#'+g.code)return route();location.hash=g.code;return}const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:np});if(error)return alert(error.message);location.hash=data.code},
+ pick(v,t){if(SELP.has(v))SELP.delete(v);else if(SELP.size<3)SELP.add(v);else return alert('Up to three players at a time.');t.classList.toggle('sel',SELP.has(v));t.setAttribute('aria-pressed',SELP.has(v));
+  const n=SELP.size;document.querySelectorAll('.chgo .btn').forEach(b=>{b.disabled=!n||(b.dataset.v=='codemaster'&&n!==1);b.classList.toggle('ghost',!n)})},
+ async hidep(v,t){const p=AV[v]||{};if(!confirm(p.hidden?`Put ${p.name} back on the player list?`:`Take ${p.name} off the player list? Their games and wins stay.`))return;const {error}=await sb.rpc('wg_hide_player',{p_me:me,p_id:v,p_hide:!p.hidden});if(error)return alert(error.message);SELP.delete(v);LOBSIG='';lobby()},
+ async challenge(k){const ids=[...SELP];if(!ids.length)return;const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:ids.length+1});if(error)return alert(error.message);
+  let gid=data&&data.id;if(!gid){const r=await sb.from('wg_games').select('id').eq('code',data.code).single();gid=r.data&&r.data.id}
+  const c=await sb.rpc('wg_challenge',{p_game:gid,p_me:me,p_players:ids});if(c.error)alert('The game is ready, but the invitations didn’t go out: '+c.error.message);else try{sb.functions.invoke('wg-notify',{body:{ping:gid}}).catch(()=>{})}catch(e){}
+  SELP.clear();location.hash=data.code},
+ accept(v){if(v)location.hash=v},
+ async decline(v){await sb.rpc('wg_decline',{p_invite:+v,p_me:me});LOBSIG='';lobby()},
+ style(v){try{localStorage.setItem('wg_style',v)}catch(e){}applyStyle();LOBSIG='';lobby()},
  join(){const c=$('#jc').value.trim().toUpperCase();if(c.length==4)location.hash=c},
  async copy(){await navigator.clipboard.writeText(location.origin+location.pathname+'#'+G.code);alert('Invite link copied')},
  hidesolo(v){if(!confirm('Remove this practice game?'))return;localStorage.removeItem(soloK(v));lobby()},

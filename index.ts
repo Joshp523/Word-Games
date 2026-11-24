@@ -37,11 +37,15 @@ Deno.serve(async (req) => {
   // Ping from the app: look at what happened in this game in the last 15 minutes and announce anything new.
   if (body.ping) {
     const gid = String(body.ping), since = new Date(Date.now() - 15 * 60e3).toISOString();
-    const [mv, ds, ws] = await Promise.all([
+    const [mv, ds, ws, iv] = await Promise.all([
       db.from("wg_moves").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
       db.from("wg_disputes").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
       db.from("wg_words").select("*").eq("game_id", gid).or(`created_at.gte.${since},decided_at.gte.${since}`),
+      db.from("wg_invites").select("*").eq("game_id", gid).gte("created_at", since),
     ]);
+    // challenges: tell each invited player who's calling them out, and to which game
+    let sentInv = 0;
+    for (const r of iv.data ?? []) if (await claim(`i:${r.id}`)) sentInv += await challenge(r);
     const jobs: [string, string, Record<string, unknown>][] = [];
     for (const r of mv.data ?? []) jobs.push([`m:${r.id}`, "wg_moves", r]);
     for (const r of ds.data ?? []) jobs.push([`d:${r.id}`, "wg_disputes", r]);
@@ -52,7 +56,7 @@ Deno.serve(async (req) => {
     }
     let sent = 0;
     for (const [key, table, r] of jobs) if (await claim(key)) sent += await handle(table, r);
-    return json({ ok: true, sent });
+    return json({ ok: true, sent: sent + sentInv });
   }
 
   if (req.headers.get("x-webhook-secret") !== Deno.env.get("WEBHOOK_SECRET")) return new Response("no", { status: 401 });
@@ -64,6 +68,22 @@ Deno.serve(async (req) => {
   if (await claim(key)) await handle(table, r);
   return new Response("ok");
 });
+
+// deno-lint-ignore no-explicit-any
+async function challenge(r: any): Promise<number> {
+  const [{ data: g }, { data: from }] = await Promise.all([
+    db.from("wg_games").select("*").eq("id", r.game_id).single(),
+    db.from("wg_players").select("name").eq("id", r.from_player).single(),
+  ]);
+  if (!g) return 0;
+  const { data: subs } = await db.from("wg_push_subs").select("*").eq("player", r.player);
+  let n = 0;
+  for (const s of subs ?? []) {
+    try { await send(s.sub, TITLE[g.kind], `${from?.name ?? "Someone"} challenges you to ${TITLE[g.kind]}! Tap to play.`, `./#${g.code}`, `wg-${g.code}`); n++; }
+    catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await db.from("wg_push_subs").delete().eq("endpoint", s.endpoint); }
+  }
+  return n;
+}
 
 // Mark an event as announced. Returns false if it already was.
 async function claim(key: string) {

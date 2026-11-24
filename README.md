@@ -11,6 +11,19 @@
 <td align="center"><img src="readme-categories.jpg" width="200"><br><sub><b>Categories</b></sub></td>
 </tr></table>
 
+## ✦ New: challenge anyone
+<table><tr><td align="center"><img src="readme-challenge.jpg" width="220"><br><sub><b>Challenge</b></sub></td><td align="center"><img src="readme-understated.jpg" width="220"><br><sub><b>Understated</b></sub></td></tr></table>
+
+**Everyone, in one place.** Every player appears in the lobby with their own picture. Tap a face or three, tap a game, and the challenge is on.
+
+**Your face, your way.** Tap your own circle to add a photo. It follows you into every game.
+
+**Challenges arrive instantly.** A buzz on their phone, a card in their lobby: *Play* or *No thanks.*
+
+**Ornate or Understated.** Love the leather and gold filigree? Keep it. Want nothing but the game? One tap at the bottom of the lobby strips it back to just the name and the play.
+
+Invite codes still work too, right at the bottom.
+
 ## ✦ Your move. Instantly.
 **Turn alerts, rebuilt.** The moment someone plays, the next player's phone buzzes. Every move, every join, every word dispute. Never twice.
 

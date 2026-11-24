@@ -105,3 +105,33 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 .gm.fresh{animation:wgfresh 1.4s ease-in-out 3;border-radius:8px}
 @keyframes wgfresh{50%{background:rgba(230,197,126,.28);box-shadow:0 0 0 6px rgba(230,197,126,.28)}}
 @media (prefers-reduced-motion:reduce){.gm.fresh{animation:none;background:rgba(230,197,126,.2)}}
+
+/* ---------- players, pictures, challenges ---------- */
+.av{--s:34px;width:var(--s);height:var(--s);flex:0 0 var(--s);border-radius:50%;overflow:hidden;display:inline-grid;place-items:center;background:var(--cell);border:2px solid var(--go);box-sizing:border-box;vertical-align:middle}
+.av img{width:100%;height:100%;object-fit:cover;display:block}.av i{font:700 calc(var(--s)*.42) 'Cinzel Decorative',serif;font-style:normal;color:var(--go)}
+.avs{display:inline-flex;margin-right:8px;vertical-align:middle}.avs .av{margin-right:-8px}.avs .av:last-child{margin-right:0}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:12px 8px;margin:6px 0 4px}
+.pchip{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:0;padding:4px 2px;color:var(--ink);font:500 16px 'Cormorant Garamond',serif;cursor:pointer;text-align:center;min-width:0}
+.pchip span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip .av{transition:box-shadow .15s,transform .15s}.pchip.sel .av{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--go);transform:scale(1.05)}.pchip.sel span{color:var(--go);font-weight:700}
+.pchip.mine .av{border-style:dashed}.pchip.gone{opacity:.45}
+.pdel{position:absolute;top:0;right:8px;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--go);color:var(--go);font:700 12px/20px sans-serif;font-style:normal}
+.chgo{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.chgo .btn{font-size:17px;letter-spacing:.08em}
+.inv{flex-basis:100%;max-width:720px}.ivr{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--go)}.ivr:first-of-type{border-top:0}
+.ivt{flex:1;min-width:0;text-align:left}.btn.sm{width:auto;min-height:40px;margin:0;padding:0 14px;font-size:15px;letter-spacing:.08em}
+.lg.low{margin-top:26px}
+.sty{display:inline-flex;margin:28px auto 6px;border:1px solid var(--go);border-radius:999px;overflow:hidden}
+.sty button{background:none;border:0;color:var(--go);font:600 15px 'Cormorant Garamond',serif;letter-spacing:.1em;text-transform:uppercase;padding:9px 18px;cursor:pointer}
+.sty button.on{background:var(--go);color:var(--bg)}
+
+/* ---------- Understated: same colours, nothing else. No leather, borders, ornaments or explanations. ---------- */
+html.min body::before{background:var(--bg)}
+html.min .o,html.min .cn,html.min .sub,html.min .ex,html.min .lg .pn>h2,html.min .lg .pn>label{display:none!important}
+html.min .fr{border:0;outline:0;padding:22px 14px 30px}
+html.min .pn,html.min .g{border:0;outline:0;box-shadow:none;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;padding:14px 6px}
+html.min h1{font-family:'Cormorant Garamond',serif;font-weight:600;letter-spacing:.06em;text-shadow:none;font-size:clamp(28px,7vw,44px)}
+html.min .pn h2{font-family:'Cormorant Garamond',serif;font-weight:600;letter-spacing:.06em}
+html.min .hl,html.min .ivr{border-color:color-mix(in srgb,var(--go) 30%,transparent)}
+html.min .btn{letter-spacing:.06em}html.min .av i{font-family:'Cormorant Garamond',serif}
+html.min .gm.up::before{display:none}
+.ivr{flex-wrap:wrap}.ivt{flex:1 1 calc(100% - 56px)}.ivr .btn.sm{flex:1 1 40%}
