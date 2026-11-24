@@ -14,7 +14,7 @@
 ## ✦ New: challenge anyone
 <table><tr><td align="center"><img src="readme-challenge.jpg" width="220"><br><sub><b>Challenge</b></sub></td><td align="center"><img src="readme-understated.jpg" width="220"><br><sub><b>Understated</b></sub></td></tr></table>
 
-**Everyone, in one place.** Every player appears in the lobby with their own picture. Tap a face or three, tap a game, and the challenge is on.
+**Everyone, in one place.** Every Word Games player appears in the lobby with their own picture, from their first game on. Tap a face or three, tap a game, and the challenge is on.
 
 **Your face, your way.** Tap your own circle to add a photo. It follows you into every game.
 
