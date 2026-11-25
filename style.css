@@ -142,3 +142,5 @@ label.btn{box-sizing:border-box}
 .tst{text-align:center;margin:18px 0 0}
 /* Understated keeps the ornate lettering for game names */
 html.min h1.gname{font-family:'Cinzel Decorative',serif;font-weight:700;letter-spacing:normal}
+/* Understated: pop-up sheets still need a solid backing */
+html.min #sheet .sh.pn{background:var(--bg);padding:24px 22px calc(24px + env(safe-area-inset-bottom,0px));border-top:1px solid color-mix(in srgb,var(--go) 35%,transparent)}

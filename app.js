@@ -84,7 +84,9 @@ function turnOf(g,mv,pl){
  if(!did(me))return'your turn';if(!pl.every(x=>did(x.player)))return'waiting on others';
  if(c.req)return c.req.by!=me&&!c.req.acc.has(me)?'your turn':'waiting on others';return'round complete'}
 let PW=[];const askOf=x=>PW.find(q=>q.game_id==x.id&&q.added_by!=me);
-function rowLabel(x,mv,pl){const on=pl.filter(p=>p.player!=me).map(p=>esc(p.name)).join(', '),t=turnOf(x,mv,pl),q=askOf(x);
+let SENT={};const pname=id=>(AV[id]||{}).name||names[id]||'someone';
+function rowLabel(x,mv,pl){const inv=(SENT[x.id]||[]).filter(id=>!pl.some(p=>p.player==id)),on=[...pl.filter(p=>p.player!=me).map(p=>esc(p.name)),...inv.map(id=>esc(pname(id)))].join(', '),t=turnOf(x,mv,pl),q=askOf(x);
+ if(x.status=='waiting'&&inv.length)return `${KINDS[x.kind][0]} with ${on}<br><em>waiting for ${inv.map(id=>esc(pname(id))).join(' & ')} to start</em>`;
  if(q)return `${KINDS[x.kind][0]} with ${on}<br><span class="yt">Approve “${esc(q.word)}”</span>`;
  return(on?`${KINDS[x.kind][0]} with ${on}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br>${t=='your turn'?'<span class="yt">Your turn</span>':`<em>${t}</em>`}`}
 /* Hall of Winners: the single best result ever recorded for each game.
@@ -107,7 +109,7 @@ let PLAYERS=[],SELP=new Set();const AV={};
 const isJosh=()=>((AV[me]||{}).name||saved()).trim().toLowerCase()==='josh';
 const face=(id,s=34)=>{const p=AV[id]||{},n=(p.name||names[id]||'?').trim();return `<span class="av" style="--s:${s}px">${p.avatar?`<img src="${p.avatar}" alt="">`:`<i>${esc(n.slice(0,1).toUpperCase())}</i>`}</span>`};
 const faces=ids=>ids.length?`<span class="avs">${ids.slice(0,3).map(id=>face(id,26)).join('')}</span>`:'';
-function invitesHTML(L){if(!L.length)return'';return `<div class="pn inv"><h2>Challenges</h2>${L.map(i=>`<div class="ivr">${face(i.from_player,40)}<span class="ivt"><b>${esc(i.from_name||'Someone')}</b> · ${esc((KINDS[i.kind]||[i.kind])[0]||'')}</span><button class="btn sm" data-a="accept" data-v="${esc(i.code||'')}">Play</button><button class="btn ghost sm" data-a="decline" data-v="${i.id}">No thanks</button></div>`).join('')}</div>`}
+function invitesHTML(L){return L.map(i=>`<div class="gm hl up"><a href="#${esc(i.code||'')}" style="color:inherit;text-decoration:none;flex:1"><span class="avs">${face(i.from_player,26)}</span>${esc((KINDS[i.kind]||[i.kind])[0]||'')} with ${esc(i.from_name||'Someone')}<br><span class="yt">New challenge · tap to play</span></a><button class="lnk" data-a="decline" data-v="${i.id}">No thanks</button></div>`).join('')}
 function challengeHTML(){const J=isJosh(),L=PLAYERS.filter(x=>x.id!==me);const n=SELP.size;
  return `<div class="pn ch"><h2>Challenge</h2><div class="plist">
   <label class="pchip mine" title="Change your picture">${face(me,52)}<span>You</span><input type="file" accept="image/*" id="avf" hidden></label>
@@ -126,12 +128,12 @@ document.addEventListener('change',e=>{const t=e.target;if(!t)return;if(t.id==='
 async function lobby(quiet){
  if(quiet&&(G||location.hash.length>1))return;
  if(!quiet){G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby'}const on=quiet?true:await pushOn();
- const [g,w,h,pl,iv,mine,pw]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id'),
-  sb.rpc('wg_player_list'),sb.from('wg_invites').select('*').eq('player',me).order('created_at',{ascending:false}),sb.from('wg_players').select('id,name,avatar').eq('id',me).maybeSingle(),sb.from('wg_words').select('word,game_id,added_by').eq('status','pending')]);PW=pw&&!pw.error?pw.data||[]:[];
+ const [g,w,h,pl,iv,mine,pw]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(300),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id'),
+  sb.rpc('wg_player_list'),sb.from('wg_invites').select('*').or(`player.eq.${me},from_player.eq.${me}`).order('created_at',{ascending:false}),sb.from('wg_players').select('id,name,avatar').eq('id',me).maybeSingle(),sb.from('wg_words').select('word,game_id,added_by').eq('status','pending')]);PW=pw&&!pw.error?pw.data||[]:[];
  if(!quiet)sb.rpc('wg_seen',{p_me:me}).then(()=>{},()=>{});
- if(!pl.error){PLAYERS=pl.data||[];PLAYERS.forEach(x=>{AV[x.id]=x})}if(mine&&mine.data)AV[me]={...(AV[me]||{}),...mine.data};const INV=iv.error?[]:(iv.data||[]);
+ if(!pl.error){PLAYERS=pl.data||[];PLAYERS.forEach(x=>{AV[x.id]=x})}if(mine&&mine.data)AV[me]={...(AV[me]||{}),...mine.data};const IVA=iv.error?[]:(iv.data||[]),INV=IVA.filter(i=>i.player==me);SENT={};IVA.filter(i=>i.from_player==me).forEach(i=>(SENT[i.game_id]=SENT[i.game_id]||[]).push(i.player));
  const solo=['ogle','categories'].map(getSolo).filter(x=>x&&x.status!='finished');
- const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(g.data||[]).filter(x=>!hid.has(x.id)).slice(0,12),MV={},GP={};
+ const hid=new Set([...(h.data||[]).map(r=>r.game_id),...hidLocal()]),vis=(()=>{const a=(g.data||[]).filter(x=>!hid.has(x.id));return [...a.filter(x=>x.status!='finished'),...a.filter(x=>x.status=='finished').slice(0,8)]})(),MV={},GP={};
  if(vis.length){const ids=vis.map(x=>x.id),[m,p]=await Promise.all([sb.from('wg_moves').select('game_id,player,payload,id').in('game_id',ids).order('id'),sb.from('wg_game_players').select('*').in('game_id',ids).order('seat')]);
   (m.data||[]).forEach(x=>(MV[x.game_id]=MV[x.game_id]||[]).push(x));(p.data||[]).forEach(x=>(GP[x.game_id]=GP[x.game_id]||[]).push(x))}
  const TT={};for(const x of vis){try{TT[x.id]=turnOf(x,MV[x.id]||[],GP[x.id]||[])}catch(e){TT[x.id]=''}}
@@ -140,9 +142,9 @@ async function lobby(quiet){
  const sig=vis.map(x=>x.id+':'+TT[x.id]).join()+'|'+solo.length+'|'+(w.data||[]).length+'|'+INV.map(i=>i.id).join()+'|'+PLAYERS.map(x=>x.id+(x.avatar||'').length).join()+(AV[me]&&AV[me].avatar||'').length;
  if(quiet){if(G||location.hash.length>1||sig===LOBSIG)return;const ae=document.activeElement;
   if(document.getElementById('sheet')||SELP.size||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))||($('#jc')&&$('#jc').value))return}
- LOBSIG=sig;MYTURN=now;turnBadge(now.size);
- app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">${invitesHTML(INV)}
- <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${askOf(x)||turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${faces((GP[x.id]||[]).map(p=>p.player).filter(p=>p!=me))}${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ LOBSIG=sig;MYTURN=now;turnBadge(now.size+INV.length);
+ app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">
+ <div class="pn"><h2>Your Games</h2>${invitesHTML(INV)}${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${askOf(x)||turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${faces([...(GP[x.id]||[]).map(p=>p.player),...(SENT[x.id]||[])].filter((p,i,a)=>p!=me&&a.indexOf(p)==i))}${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
 ${challengeHTML()}
  <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div>
 </div><div class="lg low">
@@ -365,7 +367,9 @@ const ACT={
  async challenge(k){const ids=[...SELP];if(!ids.length)return;const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:ids.length+1});if(error)return alert(error.message);
   let gid=data&&data.id;if(!gid){const r=await sb.from('wg_games').select('id').eq('code',data.code).single();gid=r.data&&r.data.id}
   const c=await sb.rpc('wg_challenge',{p_game:gid,p_me:me,p_players:ids});if(c.error)alert('The game is ready, but the invitations didn’t go out: '+c.error.message);else try{sb.functions.invoke('wg-notify',{body:{ping:gid}}).catch(()=>{})}catch(e){}
-  SELP.clear();location.hash=data.code},
+  const who=ids.map(pname).join(' & ');SELP.clear();LOBSIG='';await lobby();
+  sheet(`<h2>Challenge Sent</h2><p>${esc(who)} ${ids.length>1?'get':'gets'} an alert, and the game is waiting in ${ids.length>1?'their':'their'} list.</p><button class="btn" data-a="sheetx">OK</button><button class="btn ghost" data-a="copyc" data-v="${esc(data.code)}">Copy Invite Link</button>`)},
+ async copyc(v){try{await navigator.clipboard.writeText(location.origin+location.pathname+'#'+v);closeSheet();alert('Invite link copied')}catch(e){prompt('Copy this link:',location.origin+location.pathname+'#'+v)}},
  accept(v){if(v)location.hash=v},
  async decline(v){await sb.rpc('wg_decline',{p_invite:+v,p_me:me});LOBSIG='';lobby()},
  style(v){try{localStorage.setItem('wg_style',v)}catch(e){}applyStyle();LOBSIG='';lobby()},
