@@ -112,7 +112,7 @@ select{width:100%;min-height:44px;background:var(--bg);color:var(--ink);border:1
 .avs{display:inline-flex;margin-right:8px;vertical-align:middle}.avs .av{margin-right:-8px}.avs .av:last-child{margin-right:0}
 .plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:12px 8px;margin:6px 0 4px}
 .pchip{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:0;padding:4px 2px;color:var(--ink);font:500 16px 'Cormorant Garamond',serif;cursor:pointer;text-align:center;min-width:0}
-.pchip span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box;height:48px;min-height:0}
 .pchip .av{transition:box-shadow .15s,transform .15s}.pchip.sel .av{box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--go);transform:scale(1.05)}.pchip.sel span{color:var(--go);font-weight:700}
 .pchip.mine .av{border-style:dashed}.pchip.gone{opacity:.45}
 .pdel{position:absolute;top:0;right:8px;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--go);color:var(--go);font:700 12px/20px sans-serif;font-style:normal}
@@ -135,3 +135,10 @@ html.min .hl,html.min .ivr{border-color:color-mix(in srgb,var(--go) 30%,transpar
 html.min .btn{letter-spacing:.06em}html.min .av i{font-family:'Cormorant Garamond',serif}
 html.min .gm.up::before{display:none}
 .ivr{flex-wrap:wrap}.ivt{flex:1 1 calc(100% - 56px)}.ivr .btn.sm{flex:1 1 40%}
+
+/* Josh: tools for the one selected player; test-alert link at the very bottom */
+.chjo{display:grid;grid-template-columns:1fr 1fr;gap:10px}.chjo[hidden]{display:none}.chjo .btn{margin-top:10px;display:flex;align-items:center;justify-content:center;padding:0 6px;font-size:16px;letter-spacing:.08em;white-space:nowrap;box-sizing:border-box;height:48px;min-height:0}
+label.btn{box-sizing:border-box}
+.tst{text-align:center;margin:18px 0 0}
+/* Understated keeps the ornate lettering for game names */
+html.min h1.gname{font-family:'Cinzel Decorative',serif;font-weight:700;letter-spacing:normal}

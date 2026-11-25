@@ -15,7 +15,7 @@ const SEED={
 const CAT_SECS=60,OGLE_SECS=180,LIM=5,saved=()=>localStorage.getItem('rr_name')||'';
 let me=null,G=null,PL=[],moves=[],disp=[],reveals=[],names={},key=null,timer=null,lastSig='',CUR=1,started=false;
 const svg=(k,h,c='o')=>{const o=ORN[k];return `<svg class="${c}" viewBox="0 0 ${o.w} ${o.h}" height="${h}" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${o.d}"/></svg>`};
-const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
+const frame=(t,s,b)=>`<div class="pg"><div class="fr">${['tl','tr','bl','br'].map(c=>svg('cn',120,'cn k-'+c)).join('')}${svg('fl',60)}<h1${Object.values(KINDS).some(k=>k[0]==t)?' class="gname"':''}>${t}</h1><p class="sub">${s}</p>${svg('dv',44)}${b}${svg('dv',56)}</div></div>`;
 const shell=b=>{const y=scrollY;document.documentElement.dataset.t=document.body.dataset.t=G.kind;app.innerHTML=frame(KINDS[G.kind][0],KINDS[G.kind][1],wbox()+b);scrollTo(0,y);tick()};
 const nm=id=>esc(names[id]||'…'),opp=()=>(PL.find(x=>x.player!=me)||{}).player;
 const fatal=m=>app.innerHTML=frame('Alas','something went wrong',`<div class="row"><div class="pn"><p>${esc(m)}</p><p><em>Check config.js, run wg_schema.sql, and enable anonymous sign-ins in Supabase.</em></p></div></div>`);
@@ -83,7 +83,9 @@ function turnOf(g,mv,pl){
  const c=rnds(g,mv,pl),n=c.cur.n,did=p=>sub(n,p,mv);
  if(!did(me))return'your turn';if(!pl.every(x=>did(x.player)))return'waiting on others';
  if(c.req)return c.req.by!=me&&!c.req.acc.has(me)?'your turn':'waiting on others';return'round complete'}
-function rowLabel(x,mv,pl){const on=pl.filter(p=>p.player!=me).map(p=>esc(p.name)).join(', '),t=turnOf(x,mv,pl);
+let PW=[];const askOf=x=>PW.find(q=>q.game_id==x.id&&q.added_by!=me);
+function rowLabel(x,mv,pl){const on=pl.filter(p=>p.player!=me).map(p=>esc(p.name)).join(', '),t=turnOf(x,mv,pl),q=askOf(x);
+ if(q)return `${KINDS[x.kind][0]} with ${on}<br><span class="yt">Approve “${esc(q.word)}”</span>`;
  return(on?`${KINDS[x.kind][0]} with ${on}`:`${KINDS[x.kind][0]} — invite ${x.code}`)+`<br>${t=='your turn'?'<span class="yt">Your turn</span>':`<em>${t}</em>`}`}
 /* Hall of Winners: the single best result ever recorded for each game.
    Ogle, Rabble, Categories: the winner's points (first number of the score). Matches scored in rounds are skipped.
@@ -109,20 +111,23 @@ function invitesHTML(L){if(!L.length)return'';return `<div class="pn inv"><h2>Ch
 function challengeHTML(){const J=isJosh(),L=PLAYERS.filter(x=>x.id!==me);const n=SELP.size;
  return `<div class="pn ch"><h2>Challenge</h2><div class="plist">
   <label class="pchip mine" title="Change your picture">${face(me,52)}<span>You</span><input type="file" accept="image/*" id="avf" hidden></label>
-  ${L.map(x=>`<button class="pchip${SELP.has(x.id)?' sel':''}" data-a="pick" data-v="${x.id}" aria-pressed="${SELP.has(x.id)}">${face(x.id,52)}<span>${esc(x.name)}</span>${J?`<i class="pdel" data-a="hidep" data-v="${x.id}" role="button" aria-label="Remove ${esc(x.name)}">✕</i>`:''}</button>`).join('')||'<p class="ex"><em>Nobody to challenge yet. Players appear here after their first game.</em></p>'}</div>
-  <div class="chgo">${['rabble','ogle','categories','codemaster'].map(k=>`<button class="btn${n?'':' ghost'}" data-a="challenge" data-v="${k}"${!n||(k=='codemaster'&&n!==1)?' disabled':''}>${KINDS[k][0]}</button>`).join('')}</div></div>`}
+  ${L.map(x=>`<button class="pchip${SELP.has(x.id)?' sel':''}" data-a="pick" data-v="${x.id}" aria-pressed="${SELP.has(x.id)}">${face(x.id,52)}<span>${esc(x.name)}</span></button>`).join('')||'<p class="ex"><em>Nobody to challenge yet. Players appear here after their first game.</em></p>'}</div>
+  <div class="chgo">${['rabble','ogle','categories','codemaster'].map(k=>`<button class="btn${n?'':' ghost'}" data-a="challenge" data-v="${k}"${!n||(k=='codemaster'&&n!==1)?' disabled':''}>${KINDS[k][0]}</button>`).join('')}</div>${J?`<div class="chjo"${n===1?'':' hidden'}><button class="btn ghost" data-a="hidep">Delete Player</button><label class="btn ghost">${joPhoto()}<input type="file" accept="image/*" id="avo" hidden></label></div>`:''}</div>`}
+const one=()=>SELP.size===1?[...SELP][0]:null;
+const joPhoto=()=>{const p=AV[one()]||{};return p.avatar?'Change Photo':'Add Photo'};
+function joSync(){const b=document.querySelector('.chjo');if(!b)return;b.hidden=!one();const l=b.querySelector('label');if(l&&l.firstChild)l.firstChild.textContent=joPhoto()}
 const STY=()=>{try{return localStorage.getItem('wg_style')||'ornate'}catch(e){return'ornate'}};
 const styleToggle=()=>`<div class="sty" role="group" aria-label="Look"><button class="${STY()=='ornate'?'on':''}" data-a="style" data-v="ornate">Ornate</button><button class="${STY()=='min'?'on':''}" data-a="style" data-v="min">Understated</button></div>`;
 function applyStyle(){document.documentElement.classList.toggle('min',STY()=='min')}applyStyle();
-async function setAvatar(file){if(!file)return;const img=new Image(),url=URL.createObjectURL(file);img.src=url;await img.decode().catch(()=>{});
+async function setAvatar(file,who){if(!file)return;const id=who||me;const img=new Image(),url=URL.createObjectURL(file);img.src=url;await img.decode().catch(()=>{});
  const S=192,c=document.createElement('canvas');c.width=c.height=S;const k=Math.max(S/img.width,S/img.height),w=img.width*k,h=img.height*k;c.getContext('2d').drawImage(img,(S-w)/2,(S-h)/2,w,h);URL.revokeObjectURL(url);
- const d=c.toDataURL('image/jpeg',.82);const {error}=await sb.rpc('wg_set_avatar',{p_me:me,p_img:d});if(error)return alert('Couldn’t save your picture. '+error.message);AV[me]={...(AV[me]||{}),avatar:d};lobby()}
-document.addEventListener('change',e=>{if(e.target&&e.target.id==='avf')setAvatar(e.target.files[0])});
+ const d=c.toDataURL('image/jpeg',.82);const {error}=id==me?await sb.rpc('wg_set_avatar',{p_me:me,p_img:d}):await sb.rpc('wg_set_player_avatar',{p_me:me,p_id:id,p_img:d});if(error)return alert('Couldn’t save that picture. '+error.message);AV[id]={...(AV[id]||{}),avatar:d};LOBSIG='';lobby()}
+document.addEventListener('change',e=>{const t=e.target;if(!t)return;if(t.id==='avf')setAvatar(t.files[0]);if(t.id==='avo'&&one())setAvatar(t.files[0],one())});
 async function lobby(quiet){
  if(quiet&&(G||location.hash.length>1))return;
  if(!quiet){G=null;document.documentElement.dataset.t=document.body.dataset.t='lobby'}const on=quiet?true:await pushOn();
- const [g,w,h,pl,iv,mine]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id'),
-  sb.rpc('wg_player_list'),sb.from('wg_invites').select('*').eq('player',me).order('created_at',{ascending:false}),sb.from('wg_players').select('id,name,avatar').eq('id',me).maybeSingle()]);
+ const [g,w,h,pl,iv,mine,pw]=await Promise.all([sb.from('wg_games').select('*').order('created_at',{ascending:false}).limit(40),sb.from('wg_winners').select('*').order('won_at',{ascending:false}).limit(1000),sb.from('wg_hidden').select('game_id'),
+  sb.rpc('wg_player_list'),sb.from('wg_invites').select('*').eq('player',me).order('created_at',{ascending:false}),sb.from('wg_players').select('id,name,avatar').eq('id',me).maybeSingle(),sb.from('wg_words').select('word,game_id,added_by').eq('status','pending')]);PW=pw&&!pw.error?pw.data||[]:[];
  if(!quiet)sb.rpc('wg_seen',{p_me:me}).then(()=>{},()=>{});
  if(!pl.error){PLAYERS=pl.data||[];PLAYERS.forEach(x=>{AV[x.id]=x})}if(mine&&mine.data)AV[me]={...(AV[me]||{}),...mine.data};const INV=iv.error?[]:(iv.data||[]);
  const solo=['ogle','categories'].map(getSolo).filter(x=>x&&x.status!='finished');
@@ -137,13 +142,13 @@ async function lobby(quiet){
   if(document.getElementById('sheet')||SELP.size||(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName))||($('#jc')&&$('#jc').value))return}
  LOBSIG=sig;MYTURN=now;turnBadge(now.size);
  app.innerHTML=frame('The Lobby','begin a game, or enter an invite code',`<p class="sub">Playing as <strong>${esc(saved())}</strong> <button class="lnk" data-a="logout">Not you?</button></p><div class="lg">${invitesHTML(INV)}
- <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${faces((GP[x.id]||[]).map(p=>p.player).filter(p=>p!=me))}${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'<p style="margin-top:12px"><button class="lnk" data-a="testalert">Send Me a Test Alert</button></p>':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
+ <div class="pn"><h2>Your Games</h2>${solo.map(x=>{const m=x.moves.filter(v=>v.payload.words||v.payload.answers).length,R=1+x.moves.filter(v=>v.payload.rematch).length,up=m<R;return `<div class="gm hl${up?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${KINDS[x.kind][0]} — solo practice<br>${up?'<span class="yt">Your turn</span>':'<em>round complete</em>'}</a><button class="lnk" data-a="hidesolo" data-v="${x.kind}">Remove</button></div>`}).join('')}${vis.map(x=>`<div class="gm hl${askOf(x)||turnOf(x,MV[x.id]||[],GP[x.id]||[])=='your turn'?' up':''}"><a href="#${x.code}" style="color:inherit;text-decoration:none;flex:1">${faces((GP[x.id]||[]).map(p=>p.player).filter(p=>p!=me))}${rowLabel(x,MV[x.id]||[],GP[x.id]||[])}</a><button class="lnk" data-a="hide" data-v="${x.id}">Remove</button></div>`).join('')||(solo.length?'':'<p><em>None yet.</em></p>')}${on?'':'<button class="btn ghost" data-a="push">Turn Alerts</button>'}</div>
 ${challengeHTML()}
  <div class="pn"><h2>Hall of Winners</h2>${hall(w.data||[])}</div>
 </div><div class="lg low">
  <div class="pn"><h2>Join with a Code</h2><label for="jc">4-character code</label><input id="jc" class="cin" maxlength="4" autocapitalize="characters"><button class="btn" data-a="join">Enter the Game</button></div>
  <div class="pn"><h2>Start with an Invite Code</h2><label for="np">Players (Ogle, Rabble, Categories)</label><select id="np"><option value="1">1 · solo practice (Ogle, Categories)</option><option selected>2</option><option>3</option><option>4</option></select>${['ogle','rabble','categories','codemaster'].map(k=>`<button class="btn" data-a="new" data-v="${k}">${KINDS[k][0]}</button>`).join('')}</div>
-</div>${styleToggle()}`);
+</div>${styleToggle()}${on?'<p class="tst"><button class="lnk" data-a="testalert">Send Me a Test Alert</button></p>':''}`);
  if(quiet&&fresh.length){fresh.forEach(c=>{const a=document.querySelector(`a[href="#${c}"]`),r=a&&(a.closest('.gm')||a);if(r)r.classList.add('fresh')});try{navigator.vibrate&&navigator.vibrate([120,60,120])}catch(e){}}
  if(!quiet){clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)lobby(true)},8000);setTimeout(()=>nudge(on),900)}
 }
@@ -355,8 +360,8 @@ const ACT={
  async new(k,t){const np=k=='codemaster'?2:t&&t.dataset.solo?1:+$('#np').value;
   if(np==1){if(!['ogle','categories'].includes(k))return alert(KINDS[k][0]+' needs at least 2 players. Solo practice is for Ogle and Categories.');const g=newSolo(k);if(location.hash=='#'+g.code)return route();location.hash=g.code;return}const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:np});if(error)return alert(error.message);location.hash=data.code},
  pick(v,t){if(SELP.has(v))SELP.delete(v);else if(SELP.size<3)SELP.add(v);else return alert('Up to three players at a time.');t.classList.toggle('sel',SELP.has(v));t.setAttribute('aria-pressed',SELP.has(v));
-  const n=SELP.size;document.querySelectorAll('.chgo .btn').forEach(b=>{b.disabled=!n||(b.dataset.v=='codemaster'&&n!==1);b.classList.toggle('ghost',!n)})},
- async hidep(v,t){const p=AV[v]||{};if(!confirm(`Remove ${p.name} for good? Their account and every game they’re in will be deleted. This can’t be undone.`))return;const {error}=await sb.rpc('wg_delete_player',{p_me:me,p_id:v});if(error)return alert(error.message);SELP.delete(v);LOBSIG='';lobby()},
+  const n=SELP.size;document.querySelectorAll('.chgo .btn').forEach(b=>{b.disabled=!n||(b.dataset.v=='codemaster'&&n!==1);b.classList.toggle('ghost',!n)});joSync()},
+ async hidep(){const v=one();if(!v)return;const p=AV[v]||{};if(!confirm(`Remove ${p.name} for good? Their account and every game they’re in will be deleted. This can’t be undone.`))return;const {error}=await sb.rpc('wg_delete_player',{p_me:me,p_id:v});if(error)return alert(error.message);SELP.delete(v);LOBSIG='';lobby()},
  async challenge(k){const ids=[...SELP];if(!ids.length)return;const {data,error}=await sb.rpc('wg_create_game',{p_kind:k,p_seed:SEED[k](),p_name:saved(),p_max:ids.length+1});if(error)return alert(error.message);
   let gid=data&&data.id;if(!gid){const r=await sb.from('wg_games').select('id').eq('code',data.code).single();gid=r.data&&r.data.id}
   const c=await sb.rpc('wg_challenge',{p_game:gid,p_me:me,p_players:ids});if(c.error)alert('The game is ready, but the invitations didn’t go out: '+c.error.message);else try{sb.functions.invoke('wg-notify',{body:{ping:gid}}).catch(()=>{})}catch(e){}
@@ -399,14 +404,14 @@ const ACT={
  async realw(v){const w=String(v).toUpperCase();
   if(G&&!G.solo){const {data,error}=await sb.rpc('wg_ask_word',{p_word:w,p_game:G.id,p_player:me});
    if(error)return alert('Couldn’t send that. '+error.message);
-   await refresh();
+   pingAlerts({word:w});lastSig='';await draw();
    if(!WQ.some(q=>q.word==w&&q.status=='pending')&&data=='pending')return alert('“'+w+'” is already waiting for an answer in another game.');
    if(data=='ok')return alert('“'+w+'” has already been allowed. Try playing it again.');
    return alert('Sent. '+others().replace(/&amp;/g,'&')+' will be asked to allow “'+w+'”. Once they do, you can play it.')}
   SOLOW.add(w);localStorage.setItem('wg_solo_words',JSON.stringify([...SOLOW]));
   if(G&&G.kind=='ogle'){const a=ow();if(!a.includes(w)){a.push(w);localStorage.setItem(K('rr_ow_'),JSON.stringify(a))}OG.path=[];VIEW.ogle();const t=$('#ot');if(t){t.value='';t.focus()}}else if(G&&G.kind=='rabble')VIEW.rabble()},
- async wok(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:true,p_player:me});if(error)alert('Couldn’t save that. '+error.message);EXT.add(String(v).toUpperCase());refresh()},
- async wno(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:false,p_player:me});if(error)alert('Couldn’t save that. '+error.message);refresh()},
+ async wok(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:true,p_player:me});if(error)alert('Couldn’t save that. '+error.message);EXT.add(String(v).toUpperCase());pingAlerts({word:String(v).toUpperCase()});lastSig='';draw()},
+ async wno(v){const {error}=await sb.rpc('wg_rule_word',{p_word:v,p_ok:false,p_player:me});if(error)alert('Couldn’t save that. '+error.message);pingAlerts({word:String(v).toUpperCase()});lastSig='';draw()},
  async dispute(v){await sb.from('wg_disputes').insert({game_id:G.id,item:v,raised_by:me});refresh()},
  async rule(v,t){await sb.rpc('wg_rule_dispute',{p_id:+t.dataset.id,p_verdict:v});refresh()},
  async rnew(){const n=rnds().R.length+1;await put({rematch:{n,seed:SEED[G.kind](rnds().R.map(r=>r.seed))}});refresh()},

@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     const [mv, ds, ws, iv] = await Promise.all([
       db.from("wg_moves").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
       db.from("wg_disputes").select("*").eq("game_id", gid).gte("created_at", since).order("id"),
-      db.from("wg_words").select("*").eq("game_id", gid).or(`created_at.gte.${since},decided_at.gte.${since}`),
+      words(gid, since, body.word),
       db.from("wg_invites").select("*").eq("game_id", gid).gte("created_at", since),
     ]);
     // challenges: tell each invited player who's calling them out, and to which game
@@ -83,6 +83,19 @@ async function challenge(r: any): Promise<number> {
     catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await db.from("wg_push_subs").delete().eq("endpoint", s.endpoint); }
   }
   return n;
+}
+
+// Word requests for this game: anything asked or decided in the last 15 minutes, plus the word just asked
+// about by name (its row may be older, e.g. a word that was turned down before and asked again).
+async function words(gid: string, since: string, word?: string) {
+  let q = await db.from("wg_words").select("*").eq("game_id", gid).or(`created_at.gte.${since},decided_at.gte.${since}`);
+  if (q.error) q = await db.from("wg_words").select("*").eq("game_id", gid).gte("created_at", since); // no decided_at column yet
+  const rows = q.data ?? [];
+  if (word && !rows.some((r) => r.word === word)) {
+    const { data } = await db.from("wg_words").select("*").eq("game_id", gid).eq("word", String(word).toUpperCase()).maybeSingle();
+    if (data) rows.push(data);
+  }
+  return { data: rows };
 }
 
 // Mark an event as announced. Returns false if it already was.
